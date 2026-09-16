@@ -21,6 +21,9 @@ import { useJardin } from './hooks/useJardin';
 export default function App() {
   const [tab, setTab] = useState<NavigationTab>('inicio');
   const [toasts, setToasts] = useState<AvisoToast[]>([]);
+  // Versión de la config de IA: al cambiar el token en Ajustes se
+  // bumpea y Header/Identificar re-leen localStorage sin recargar la app.
+  const [versionIA, setVersionIA] = useState(0);
   const jardin = useJardin();
 
   // Toast global (mismo patrón que RiderTrack)
@@ -53,7 +56,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100">
-      <Header tab={tab} onCambiarTab={setTab} />
+      <Header key={versionIA} tab={tab} onCambiarTab={setTab} />
 
       <main className="flex-1 w-full max-w-2xl mx-auto px-4 pt-4 pb-28">
         <AnimatePresence mode="wait">
@@ -68,7 +71,7 @@ export default function App() {
               <DashboardView plantas={jardin.plantas} onIdentificar={irAIdentificar} onAbrirJardin={() => setTab('jardin')} />
             )}
             {tab === 'identificar' && (
-              <IdentificarView onGuardar={jardin.agregar} onToast={lanzarToast} />
+              <IdentificarView key={`id-${versionIA}`} onGuardar={jardin.agregar} onToast={lanzarToast} onIrAjustes={() => setTab('ajustes')} />
             )}
             {tab === 'jardin' && (
               <JardinView jardin={jardin} onToast={lanzarToast} />
@@ -77,7 +80,7 @@ export default function App() {
               <ChatBotanicoView plantas={jardin.plantas} onToast={lanzarToast} onIrAjustes={() => setTab('ajustes')} />
             )}
             {tab === 'ajustes' && (
-              <AjustesView onToast={lanzarToast} />
+              <AjustesView onToast={lanzarToast} onCambioIA={() => setVersionIA(v => v + 1)} />
             )}
           </motion.div>
         </AnimatePresence>

@@ -4,7 +4,7 @@
 // y acerca de. Firebase queda para la v2.1.
 // ═══════════════════════════════════════════════════════════
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Sparkles, Moon, Sun, MonitorSmartphone, Download, Upload, Info, Check, Loader2, CloudOff, KeyRound, ChevronDown } from 'lucide-react';
 import { useTema, type ModoTema } from '../theme/useTema';
 import {
@@ -15,8 +15,11 @@ import { useJardin } from '../hooks/useJardin';
 
 export function AjustesView({
   onToast,
+  onCambioIA,
 }: {
   onToast: (tipo: 'exito' | 'error' | 'info', texto: string) => void;
+  /** Avisa a App que la config de IA cambió para refrescar el badge del header. */
+  onCambioIA?: () => void;
 }) {
   const cfgInicial = leerConfigIA();
   const [token, setToken] = useState(cfgInicial.token);
@@ -26,16 +29,35 @@ export function AjustesView({
   const { modo, actualizarModo } = useTema();
   const { refrescar } = useJardin();
 
+  // 💾 AUTO-GUARDADO (fix 2026-09-16): el token se guarda solo, con
+  // debounce de 500ms, mientras el usuario pega/escribe. Antes, si
+  // pegabas el token y te ibas directo a Identificar SIN apretar
+  // "Guardar", el token se perdía y la app quedaba en modo demo.
+  const primerRender = useRef(true);
+  useEffect(() => {
+    if (primerRender.current) { primerRender.current = false; return; }
+    const t = setTimeout(() => {
+      guardarConfigIA({ token: token.trim(), modelo });
+      onCambioIA?.();
+    }, 500);
+    return () => clearTimeout(t);
+  }, [token, modelo, onCambioIA]);
+
   const guardarIA = () => {
     guardarConfigIA({ token: token.trim(), modelo });
-    onToast('exito', '🤖 Configuración de IA guardada');
-    // recargar para que el badge del header se actualice
-    setTimeout(() => window.location.reload(), 600);
+    onCambioIA?.();
+    onToast('exito', token.trim() ? '🤖 Token guardado — IA activa' : '🤖 Token vacío — modo demo');
   };
 
   const probar = async () => {
     setProbando(true);
     guardarConfigIA({ token: token.trim(), modelo });
+    onCambioIA?.();
+    if (!token.trim()) {
+      onToast('error', 'Pega tu token primero.');
+      setProbando(false);
+      return;
+    }
     const r = await probarConexion({ token: token.trim(), modelo });
     onToast(r.ok ? 'exito' : 'error', r.mensaje);
     setProbando(false);
@@ -109,8 +131,12 @@ export function AjustesView({
             </button>
           </div>
           <p className="text-[10px] text-slate-500 mt-1.5 leading-relaxed">
-            Se guarda SOLO en tu dispositivo (localStorage). Conseguilo en console.anthropic.com → API Keys.
+            Se guarda SOLO en tu dispositivo y se respalda automáticamente al pegarlo. ⚠️ El token configurado en la versión web NO aplica en la APK (y viceversa): configúralo dentro de la app que uses. Consíguelo en console.anthropic.com → API Keys.
           </p>
+          <div className={`mt-2 flex items-center gap-2 text-[11px] font-bold ${token.trim().length > 10 ? 'text-emerald-400' : 'text-amber-400'}`}>
+            <span className={`w-2 h-2 rounded-full ${token.trim().length > 10 ? 'bg-emerald-400 animar-latido' : 'bg-amber-400'}`} />
+            {token.trim().length > 10 ? 'Token detectado — IA activa en esta app' : 'Sin token — modo demo activo'}
+          </div>
         </div>
 
         <div>

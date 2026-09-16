@@ -5,7 +5,7 @@
 // ═══════════════════════════════════════════════════════════
 
 import { useState } from 'react';
-import { Camera, ImagePlus, ScanSearch, RefreshCcw, Sprout, TriangleAlert, Save, Sparkles } from 'lucide-react';
+import { Camera, ImagePlus, ScanSearch, RefreshCcw, Sprout, TriangleAlert, Save, Sparkles, Settings2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import type { FichaPlanta, PlantaGuardada } from '../types';
 import { tomarFoto, elegirDeGaleria, type FotoPlanta } from '../services/camara';
@@ -18,9 +18,12 @@ type Fase = 'lista' | 'listaConFoto' | 'analizando' | 'resultado';
 export function IdentificarView({
   onGuardar,
   onToast,
+  onIrAjustes,
 }: {
   onGuardar: (p: PlantaGuardada) => void;
   onToast: (tipo: 'exito' | 'error' | 'info', texto: string) => void;
+  /** Salta a Ajustes desde el aviso de modo demo. */
+  onIrAjustes?: () => void;
 }) {
   const [fase, setFase] = useState<Fase>('lista');
   const [foto, setFoto] = useState<FotoPlanta | null>(null);
@@ -86,10 +89,19 @@ export function IdentificarView({
       {demo && fase !== 'resultado' && (
         <div className="rounded-2xl p-3.5 bg-amber-950/40 border border-amber-900/50 flex gap-2.5">
           <Sparkles className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-          <p className="text-xs text-amber-200/90 leading-relaxed">
-            <b>Modo demo activo:</b> sin token de Claude los resultados son de ejemplo.
-            Configuralo en <b>Ajustes → IA</b> para análisis real. 🌿
-          </p>
+          <div className="flex-1">
+            <p className="text-xs text-amber-200/90 leading-relaxed">
+              <b>Modo demo activo:</b> sin token de Claude los resultados son de ejemplo.
+            </p>
+            {onIrAjustes && (
+              <button
+                onClick={onIrAjustes}
+                className="mt-2.5 flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500/15 border border-amber-600/40 text-[11px] font-black text-amber-300 active:scale-[0.97] transition"
+              >
+                <Settings2 className="w-3.5 h-3.5" /> Configurar token de IA
+              </button>
+            )}
+          </div>
         </div>
       )}
 
