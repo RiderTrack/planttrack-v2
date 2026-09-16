@@ -141,19 +141,9 @@ jobs:
             sed -i '/dependencies {/a\    implementation "com.google.android.gms:play-services-auth:20.7.0"' "$APP_GRADLE"
           fi
           # server_client_id en strings.xml — lo lee el plugin nativo
-          # (oauth_client client_type 3 del json)
-          SERVER_CLIENT_ID=$(python3 -c "
-import json
-try:
-    d = json.load(open('google-services.json'))
-    for c in d.get('client', []):
-        for o in c.get('oauth_client', []):
-            if o.get('client_type') == 3:
-                print(o['client_id']); raise SystemExit
-except Exception:
-    pass
-print('')
-")
+          # (oauth_client client_type 3 del json). One-liner para no
+          # romper el block scalar de YAML con un python multi-línea.
+          SERVER_CLIENT_ID=$(python3 -c "import json; d=json.load(open('google-services.json')); print(next((o['client_id'] for c in d.get('client',[]) for o in c.get('oauth_client',[]) if o.get('client_type')==3), ''))")
           if [ -n "$SERVER_CLIENT_ID" ]; then
             sed -i "s|</resources>|<string name=\"server_client_id\">$SERVER_CLIENT_ID</string></resources>|" android/app/src/main/res/values/strings.xml
             echo "✅ server_client_id configurado: ${SERVER_CLIENT_ID:0:25}..."
