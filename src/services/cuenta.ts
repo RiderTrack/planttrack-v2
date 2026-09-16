@@ -14,6 +14,7 @@ import {
   auth,
   firebaseListo,
   GoogleAuthProvider,
+  SERVER_CLIENT_ID,
 } from './firebase';
 import {
   signInWithCredential,
@@ -30,13 +31,32 @@ export interface CuentaUsuario {
   fotoUrl: string;
 }
 
-/** El plugin nativo se inicializa una sola vez (Android/iOS). */
-let pluginNativoListo = false;
-function asegurarPluginNativo(): void {
-  if (!pluginNativoListo && Capacitor.isNativePlatform()) {
-    GoogleAuth.initialize();
-    pluginNativoListo = true;
+/** El plugin nativo se inicializa UNA vez — con clientId explícito y
+ *  AWAIT antes de signIn(). ⚠️ Sin esto la app se cierra en Android:
+ *  el plugin v3.4.0-rc.4 (Capacitor 6) no construye GoogleSignInClient
+ *  si initialize() no recibe clientId → NPE en signIn() (issue #389).
+ *  Si falla, se limpia la caché para poder reintentar. */
+let pluginNativoListo: Promise<void> | null = null;
+
+function asegurarPluginNativo(): Promise<void> {
+  if (!pluginNativoListo) {
+    const opciones: { clientId?: string; scopes: string[] } = {
+      scopes: ['profile', 'email'],
+    };
+    // clientId explícito (web client del proyecto Firebase) — es la
+    // audience correcta del idToken para signInWithCredential.
+    if (SERVER_CLIENT_ID.length > 10) opciones.clientId = SERVER_CLIENT_ID;
+
+    const intento = GoogleAuth.initialize(opciones);
+    pluginNativoListo = intento.then(
+      () => undefined,
+      (e) => {
+        pluginNativoListo = null; // permite reintentar en el próximo tap
+        throw e;
+      },
+    );
   }
+  return pluginNativoListo;
 }
 
 function aCuentaUsuario(u: User): CuentaUsuario {
@@ -66,6 +86,10 @@ function traducirError(e: unknown): string {
   if (/server_client_id|serverClientId/i.test(msg)) {
     return 'El APK no incluye el client ID de Google — descargá la última versión.';
   }
+  // Plugin no registrado en el build nativo
+  if (/not implemented|Unimplemented/i.test(msg + ' ' + cod)) {
+    return 'Tu versión de la app no trae el login nativo — descargá la última APK.';
+  }
   // Web: proveedor Google deshabilitado en Authentication
   if (/configuration-not-found|operation-not-allowed/i.test(cod)) {
     return 'Habilitá Google en Firebase → Authentication → Sign-in method.';
@@ -87,17 +111,17 @@ export async function iniciarSesionGoogle(): Promise<CuentaUsuario> {
   if (!authDisponible()) {
     throw new Error('Firebase aún no está configurado en esta versión.');
   }
-  asegurarPluginNativo();
 
   if (Capacitor.isNativePlatform()) {
-    // Fluyo nativo: el plugin devuelve el idToken de la cuenta del teléfono
-    let resultado;
+    // Fluyo nativo: PRIMERO initialize (await — sin esto, crash en Android)
     try {
-      resultado = await GoogleAuth.signIn();
+      await asegurarPluginNativo();
     } catch (e) {
-      console.warn('[PlantTrack] GoogleAuth.signIn:', e);
+      console.warn('[PlantTrack] GoogleAuth.initialize:', e);
       throw new Error(traducirError(e));
     }
+    // El plugin devuelve el idToken de la cuenta del teléfono
+    const resultado = await GoogleAuth.signIn();
     const credencial = GoogleAuthProvider.credential(resultado.authentication.idToken);
     const uc = await signInWithCredential(auth!, credencial);
     return aCuentaUsuario(uc.user);

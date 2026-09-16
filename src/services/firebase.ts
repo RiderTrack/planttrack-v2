@@ -32,10 +32,15 @@ const firebaseConfig = {
   appId: '1:676327457162:android:4d6ddb608934dc57328873',
 };
 
-// Client ID OAuth web/default (oauth_client client_type 3 del
-// google-services.json). Referencia: el APK lo recibe por strings.xml
-// (lo inyecta el CI), la web no lo necesita. Se pega solo como doc.
-export const SERVER_CLIENT_ID = '';
+// Client ID OAuth WEB del proyecto planttrack-6a0e1 (el "default web
+// client" que Firebase crea automáticamente al habilitar Google Auth).
+// Se usa como audience del idToken en web Y en Android — es el flujo
+// estándar de Firebase con Google Sign-In (requestIdToken(webClientId)).
+// ⚠️ CRÍTICO en Android: initialize() del plugin DEBE recibirlo
+// explícitamente — sin él, GoogleSignInClient no se construye y
+// signIn() revienta con NPE cerrando la app (issue #389 del plugin).
+export const SERVER_CLIENT_ID =
+  '676327457162-7m0hfcsnh7vb5us0sh7pio6k5mntt301.apps.googleusercontent.com';
 
 /** true cuando los valores ya fueron pegados → se activa Auth + Sync.
  *  (En la APK el server_client_id llega vía strings.xml del CI.) */
