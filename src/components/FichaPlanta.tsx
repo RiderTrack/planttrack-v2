@@ -7,7 +7,7 @@
 import type { FichaPlanta as Ficha, Dificultad } from '../types';
 import {
   Droplets, Sun, Thermometer, Wind, Layers, Scissors, FlaskConical,
-  Bug, Sparkles, Leaf, Skull, TriangleAlert, Gauge, BookOpen,
+  Bug, Sparkles, Leaf, Skull, TriangleAlert, Gauge, BookOpen, Globe2, Skull as IconoCalavera,
 } from 'lucide-react';
 
 const ETIQUETA_DIFICULTAD: Record<Dificultad, { texto: string; clase: string }> = {
@@ -40,6 +40,8 @@ export function FichaPlantaCard({
   modoDemo?: boolean;
 }) {
   const dif = ETIQUETA_DIFICULTAD[ficha.dificultad] || ETIQUETA_DIFICULTAD.media;
+  const regionales = (ficha.nombresRegionales || []).filter(r => r?.region && r?.nombre).slice(0, 8);
+  const errores = (ficha.erroresComunes || []).slice(0, 3);
 
   return (
     <article className="space-y-4">
@@ -57,6 +59,12 @@ export function FichaPlantaCard({
           </div>
         )}
         <div className="p-4 -mt-8 relative">
+          {ficha.nombreLocal && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-1 rounded-full bg-emerald-500/20 text-emerald-300 mb-2 border border-emerald-500/30">
+              <Globe2 className="w-3 h-3" />
+              En tu zona: {ficha.nombreLocal}{ficha.regionUsuario ? ` (${ficha.regionUsuario})` : ''}
+            </span>
+          )}
           <h2 className="text-xl font-black leading-tight">{ficha.nombreComun || 'Planta'}</h2>
           <p className="text-xs italic text-slate-400 mt-0.5">{ficha.nombreCientifico}</p>
           {ficha.familia && (
@@ -83,6 +91,51 @@ export function FichaPlantaCard({
           )}
         </div>
       </section>
+
+      {/* ── Nombres regionales ── */}
+      {regionales.length > 0 && (
+        <section className="rounded-3xl bg-slate-900 border border-slate-800 p-4">
+          <h3 className="text-sm font-black flex items-center gap-2 mb-3">
+            <Globe2 className="w-4 h-4 text-sky-400" /> Se le conoce como…
+          </h3>
+          <div className="flex flex-wrap gap-1.5">
+            {regionales.map((r, i) => (
+              <span
+                key={i}
+                className={`text-[11px] font-bold px-2.5 py-1.5 rounded-xl border ${
+                  ficha.nombreLocal && r.nombre === ficha.nombreLocal
+                    ? 'bg-emerald-500/15 border-emerald-600/50 text-emerald-300'
+                    : 'bg-slate-800/60 border-slate-700 text-slate-300'
+                }`}
+              >
+                {r.nombre} <span className="text-slate-500 font-medium">· {r.region}</span>
+              </span>
+            ))}
+          </div>
+          <p className="text-[11px] text-slate-500 mt-2.5 leading-relaxed">
+            La misma planta cambia de nombre según el país 🌎 — el nombre científico es el pasaporte universal.
+          </p>
+        </section>
+      )}
+
+      {/* ── Errores comunes ── */}
+      {errores.length > 0 && (
+        <section className="rounded-3xl bg-slate-900 border border-rose-900/40 p-4">
+          <h3 className="text-sm font-black flex items-center gap-2 mb-3">
+            <IconoCalavera className="w-4 h-4 text-rose-400" /> Los 3 errores que la matan
+          </h3>
+          <ol className="space-y-2">
+            {errores.map((e, i) => (
+              <li key={i} className="flex gap-2.5 items-start">
+                <span className="shrink-0 w-5 h-5 rounded-lg bg-rose-500/15 text-rose-400 text-[11px] font-black flex items-center justify-center mt-0.5">
+                  {i + 1}
+                </span>
+                <p className="text-sm text-slate-200 leading-relaxed">{e}</p>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
 
       {/* ── Cuidados esenciales ── */}
       <section className="rounded-3xl bg-slate-900 border border-slate-800 p-4 space-y-4">

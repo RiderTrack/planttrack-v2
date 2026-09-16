@@ -69,8 +69,13 @@ function escribirJardinLocal(plantas: PlantaGuardada[]): void {
 }
 
 function hashJardin(plantas: PlantaGuardada[]): string {
-  // fotoDataUrl excluida del hash: es caché local, no dato de sync
-  const ligero = plantas.map(p => ({ id: p.id, mod: p._mod || '', r: (p.historialRiego || []).length, pr: p.proximoRiego }));
+  // fotoDataUrl y fotos[] excluidas del hash: son caché local, no dato de sync
+  const ligero = plantas.map(p => ({
+    id: p.id, mod: p._mod || '', r: (p.historialRiego || []).length,
+    pr: p.proximoRiego, f: (p.fotos || []).length,
+    alt: p.alturaCm ?? null, et: (p.etiquetas || []).length,
+    rec: (p.recordatorios || []).length,
+  }));
   return JSON.stringify(ligero);
 }
 
@@ -95,8 +100,8 @@ async function tirarYFusionar(): Promise<void> {
         fusionadas.push(planta);
         cambio = true;
       } else if ((planta._mod || '') > (enLocal._mod || '')) {
-        // la remota es más reciente → gana, pero conserva la foto local (cache)
-        const fusion = { ...planta, fotoDataUrl: enLocal.fotoDataUrl || '' };
+        // la remota es más reciente → gana, pero conserva fotos locales (cache)
+        const fusion = { ...planta, fotoDataUrl: enLocal.fotoDataUrl || '', fotos: enLocal.fotos || [] };
         const idx = fusionadas.findIndex(p => p.id === id);
         if (idx >= 0) fusionadas[idx] = fusion;
         cambio = true;
@@ -125,8 +130,8 @@ async function empujar(): Promise<void> {
 
     const batch = writeBatch(db);
     for (const planta of sellado) {
-      const { fotoDataUrl: _fuera, ...sinFoto } = planta;
-      batch.set(doc(db, 'usuarios', uid, 'plantas', planta.id), sinFoto, { merge: true });
+      const { fotoDataUrl: _fuera, fotos: _fotos, ...sinFotos } = planta;
+      batch.set(doc(db, 'usuarios', uid, 'plantas', planta.id), sinFotos, { merge: true });
     }
     await batch.commit();
 

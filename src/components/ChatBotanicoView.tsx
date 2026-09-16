@@ -35,8 +35,8 @@ export function ChatBotanicoView({
     finRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [mensajes, pensando]);
 
-  const enviar = async () => {
-    const pregunta = entrada.trim();
+  const enviar = async (textoPregunta?: string) => {
+    const pregunta = (textoPregunta ?? entrada).trim();
     if (!pregunta || pensando) return;
     setEntrada('');
     const mios: MensajeChat[] = [...mensajes, { id: crypto.randomUUID(), rol: 'user', texto: pregunta, fecha: new Date().toISOString() }];
@@ -45,7 +45,11 @@ export function ChatBotanicoView({
 
     // Contexto del jardín para respuestas personalizadas
     const contexto = plantas.length > 0
-      ? `[Mis plantas guardadas: ${plantas.map(p => `${p.ficha.nombreComun} (riego cada ${p.ficha.cuidados.riego.frecuenciaDias} días)`).join('; ')}]`
+      ? `[Mis plantas guardadas: ${plantas.map(p => {
+          const nombre = p.apodo ? `${p.apodo} (${p.ficha.nombreComun})` : p.ficha.nombreComun;
+          const local = p.ficha.nombreLocal && p.ficha.nombreLocal !== p.ficha.nombreComun ? `, aquí le decimos ${p.ficha.nombreLocal}` : '';
+          return `${nombre} (riego cada ${p.ficha.cuidados.riego.frecuenciaDias} días${local})`;
+        }).join('; ')}]`
       : '';
 
     const r = await chatearBotanica(pregunta, mios.slice(0, -1), contexto);
@@ -90,12 +94,30 @@ export function ChatBotanicoView({
       {/* Mensajes */}
       <div className="flex-1 overflow-y-auto space-y-3 pr-1" role="log" aria-label="Conversación con el botánico">
         {mensajes.length === 0 && !pensando && (
-          <div className="pt-8 text-center space-y-3">
+          <div className="pt-8 text-center space-y-4">
             <Sprout className="w-12 h-12 text-emerald-800 mx-auto" />
             <p className="text-sm text-slate-400 leading-relaxed max-w-xs mx-auto">
               Preguntame sobre tus plantas: riego, abono, plagas, hojas amarillas…<br />
-              <span className="text-slate-600">Conozco las especies que guardaste en tu jardín.</span>
+              <span className="text-slate-600">Conozco las especies que guardaste en tu jardín y sus nombres regionales 🌎</span>
             </p>
+            {/* Chips de sugerencias */}
+            <div className="flex flex-wrap gap-2 justify-center pt-1">
+              {[
+                '¿Por qué se ponen amarillas las hojas?',
+                '¿Cómo hago esquejes en agua?',
+                '¿Qué le pasa a mi planta si la riego demasiado?',
+                '¿Qué es el ají charapita?',
+                '¿Cuándo debo trasplantar?',
+              ].map(s => (
+                <button
+                  key={s}
+                  onClick={() => enviar(s)}
+                  className="text-[11px] font-bold px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 active:scale-95 transition hover:border-emerald-700/60"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
@@ -163,7 +185,7 @@ export function ChatBotanicoView({
           className="flex-1 pl-4 pr-3 py-3.5 rounded-2xl bg-slate-900 border border-slate-800 text-sm placeholder:text-slate-600 focus:outline-none focus:border-emerald-600/60 focus:ring-2 focus:ring-emerald-600/20 disabled:opacity-50"
         />
         <button
-          onClick={enviar}
+          onClick={() => enviar()}
           disabled={!entrada.trim() || pensando}
           aria-label="Enviar pregunta"
           className="w-14 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center shadow-lg shadow-emerald-900/40 active:scale-95 transition disabled:opacity-40 disabled:shadow-none"

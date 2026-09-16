@@ -5,7 +5,7 @@
 // ═══════════════════════════════════════════════════════════
 
 import { useEffect, useRef, useState } from 'react';
-import { Sparkles, Moon, Sun, MonitorSmartphone, Download, Upload, Info, Check, Loader2, CloudOff, Cloud, LogOut, KeyRound, ChevronDown } from 'lucide-react';
+import { Sparkles, Moon, Sun, MonitorSmartphone, Download, Upload, Info, Check, Loader2, CloudOff, Cloud, LogOut, KeyRound, ChevronDown, Globe2, Bell, BellOff } from 'lucide-react';
 import { useTema, type ModoTema } from '../theme/useTema';
 import {
   MODELOS_CLAUDE, leerConfigIA, guardarConfigIA, probarConexion,
@@ -14,6 +14,9 @@ import { exportarJardin, importarJardin, listarPlantas } from '../services/jardi
 import { useJardin } from '../hooks/useJardin';
 import { authDisponible, iniciarSesionGoogle, cerrarSesion, type CuentaUsuario } from '../services/cuenta';
 import { estadoSync, observarSync, type EstadoSync } from '../services/sync';
+import {
+  leerConfigNotif, guardarConfigNotif, notificacionesDisponibles, reprogramarNotificaciones,
+} from '../services/notificaciones';
 
 export function AjustesView({
   onToast,
@@ -153,6 +156,22 @@ export function AjustesView({
     input.click();
   };
 
+  // ── v1.2: región del usuario (para nombres regionales) ──
+  const [pais, setPais] = useState(cfgInicial.pais || '');
+  useEffect(() => {
+    guardarConfigIA({ ...leerConfigIA(), pais });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pais]);
+
+  // ── v1.2: notificaciones locales ──
+  const [notifCfg, setNotifCfg] = useState(leerConfigNotif());
+  const actualizarNotif = (cambios: Partial<typeof notifCfg>) => {
+    const nueva = { ...notifCfg, ...cambios };
+    setNotifCfg(nueva);
+    guardarConfigNotif(nueva);
+    void reprogramarNotificaciones(listarPlantas());
+  };
+
   const OPCIONES_TEMA: { id: ModoTema; icono: typeof Moon; texto: string }[] = [
     { id: 'dark', icono: Moon, texto: 'Oscuro' },
     { id: 'light', icono: Sun, texto: 'Claro' },
@@ -266,6 +285,85 @@ export function AjustesView({
         </div>
       </section>
 
+      {/* ── Mi región (nombres regionales) ── */}
+      <section className="rounded-3xl bg-slate-900 border border-slate-800 p-4 space-y-3">
+        <h3 className="text-sm font-black flex items-center gap-2">
+          <Globe2 className="w-4 h-4 text-sky-400" /> Mi región
+          <span className="ml-auto text-[10px] font-bold text-slate-500">nombres locales</span>
+        </h3>
+        <p className="text-xs text-slate-500 leading-relaxed">
+          Dónde vives — así la IA usa los nombres correctos de tus plantas (ají charapita en Perú 🌶️, chiltepe en Guatemala…).
+        </p>
+        <select
+          value={pais}
+          onChange={e => setPais(e.target.value)}
+          aria-label="País o región"
+          className="w-full appearance-none pl-3.5 pr-10 py-3 rounded-2xl bg-slate-800/60 border border-slate-700 text-sm font-semibold focus:outline-none focus:border-sky-600/60"
+        >
+          <option value="">— Sin definir —</option>
+          {['Perú', 'Argentina', 'Bolivia', 'Chile', 'Colombia', 'Costa Rica', 'Cuba', 'Ecuador', 'El Salvador', 'España', 'Estados Unidos', 'Guatemala', 'Honduras', 'México', 'Nicaragua', 'Panamá', 'Paraguay', 'Puerto Rico', 'República Dominicana', 'Uruguay', 'Venezuela', 'Otro país'].map(p => (
+            <option key={p} value={p}>{p}</option>
+          ))}
+        </select>
+        {pais && (
+          <div className="flex items-center gap-2 text-[11px] font-bold text-emerald-400">
+            <span className="w-2 h-2 rounded-full bg-emerald-400" />
+            La IA usará nombres de {pais}
+          </div>
+        )}
+      </section>
+
+      {/* ── Recordatorios (notificaciones) ── */}
+      <section className="rounded-3xl bg-slate-900 border border-slate-800 p-4 space-y-3">
+        <h3 className="text-sm font-black flex items-center gap-2">
+          <Bell className="w-4 h-4 text-amber-400" /> Recordatorios
+          <span className="ml-auto text-[10px] font-bold text-slate-500">aviso de riego</span>
+        </h3>
+        {!notificacionesDisponibles() ? (
+          <p className="text-xs text-slate-500 leading-relaxed">
+            Los avisos aunque la app esté cerrada están disponibles en la app Android (APK). En la versión web usa los recordatorios dentro de la app. 🔔
+          </p>
+        ) : (
+          <>
+            <div className="flex items-center justify-between rounded-2xl bg-slate-800/50 p-3">
+              <div className="flex items-center gap-2.5">
+                {notifCfg.activadas ? <Bell className="w-5 h-5 text-amber-400" /> : <BellOff className="w-5 h-5 text-slate-500" />}
+                <div>
+                  <p className="text-sm font-bold">Avisos de riego</p>
+                  <p className="text-[10px] text-slate-500"> aunque cierres la app</p>
+                </div>
+              </div>
+              <button
+                onClick={() => actualizarNotif({ activadas: !notifCfg.activadas })}
+                role="switch"
+                aria-checked={notifCfg.activadas}
+                aria-label="Activar notificaciones"
+                className={`w-12 h-7 rounded-full transition relative ${notifCfg.activadas ? 'bg-emerald-500' : 'bg-slate-600'}`}
+              >
+                <span className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-all ${notifCfg.activadas ? 'left-6' : 'left-1'}`} />
+              </button>
+            </div>
+            {notifCfg.activadas && (
+              <div className="flex items-center justify-between rounded-2xl bg-slate-800/50 p-3">
+                <p className="text-sm font-bold">Hora del aviso</p>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    min={5}
+                    max={22}
+                    value={notifCfg.hora}
+                    onChange={e => actualizarNotif({ hora: Math.max(5, Math.min(22, parseInt(e.target.value, 10) || 9)) })}
+                    aria-label="Hora del aviso"
+                    className="w-16 px-2 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-center text-sm font-black focus:outline-none focus:border-amber-600/60"
+                  />
+                  <span className="text-xs font-bold text-slate-400">:00</span>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </section>
+
       {/* ── Apariencia ── */}
       <section className="rounded-3xl bg-slate-900 border border-slate-800 p-4">
         <h3 className="text-sm font-black mb-3">Apariencia</h3>
@@ -377,7 +475,7 @@ export function AjustesView({
       <section className="rounded-3xl bg-slate-900 border border-slate-800 p-4 flex gap-3">
         <Info className="w-5 h-5 text-slate-500 shrink-0 mt-0.5" />
         <div className="text-xs text-slate-500 leading-relaxed space-y-1">
-          <p className="text-sm font-black text-slate-300">PlantTrack V2 · 1.1.2</p>
+          <p className="text-sm font-black text-slate-300">PlantTrack V2 · 1.2.0</p>
           <p>React 19 + Vite 6 + TypeScript + Tailwind 4 + Capacitor 6.</p>
           <p>Identificación botánica, cuidados, abonos y plagas potenciados por Claude (Anthropic).</p>
           <p>Hecho con 🌿 para riders de plantas — de la familia Track.</p>

@@ -15,12 +15,14 @@ import { IdentificarView } from './components/IdentificarView';
 import { JardinView } from './components/JardinView';
 import { ChatBotanicoView } from './components/ChatBotanicoView';
 import { AjustesView } from './components/AjustesView';
+import { AcademiaView } from './components/AcademiaView';
 import { esNativo } from './services/plataforma';
 import { hayToken } from './services/claude';
 import { useJardin } from './hooks/useJardin';
 import type { CuentaUsuario } from './services/cuenta';
 import { observarSesion } from './services/cuenta';
 import { iniciarSincronizacion, detenerSincronizacion, observarSync } from './services/sync';
+import { reprogramarNotificaciones } from './services/notificaciones';
 
 export default function App() {
   const [tab, setTab] = useState<NavigationTab>('inicio');
@@ -33,6 +35,11 @@ export default function App() {
   const [iaConectada, setIaConectada] = useState(hayToken());
   const refrescarIA = useCallback(() => setIaConectada(hayToken()), []);
   const jardin = useJardin();
+  const [mostrarAcademia, setMostrarAcademia] = useState(false);
+  // 🔔 v1.2: notificaciones locales — reprogramar cuando el jardín cambia
+  useEffect(() => {
+    void reprogramarNotificaciones(jardin.plantas);
+  }, [jardin.plantas]);
   // ☁️ Sesión de nube (opcional): el observer vive a nivel raíz para
   // que el sync corra en background sin importar la pestaña activa.
   // Si Firebase no está configurado → siempre null y no pasa nada.
@@ -101,7 +108,7 @@ export default function App() {
             transition={{ duration: 0.18 }}
           >
             {tab === 'inicio' && (
-              <DashboardView plantas={jardin.plantas} onIdentificar={irAIdentificar} onAbrirJardin={() => setTab('jardin')} />
+              <DashboardView plantas={jardin.plantas} onIdentificar={irAIdentificar} onAbrirJardin={() => setTab('jardin')} onAbrirAcademia={() => setMostrarAcademia(true)} />
             )}
             {tab === 'identificar' && (
               <IdentificarView onGuardar={jardin.agregar} onToast={lanzarToast} demo={!iaConectada} onIrAjustes={() => setTab('ajustes')} />
@@ -121,6 +128,13 @@ export default function App() {
 
       <BottomNav tab={tab} onCambiarTab={setTab} />
       <ToastContainer toasts={toasts} onCerrar={id => setToasts(ts => ts.filter(t => t.id !== id))} />
+
+      {/* 🎓 Academia PlantTrack (overlay desde Dashboard) */}
+      <AnimatePresence>
+        {mostrarAcademia && (
+          <AcademiaView onCerrar={() => setMostrarAcademia(false)} onToast={lanzarToast} />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
