@@ -172,7 +172,9 @@ export function AjustesView({
       onToast('exito', `👋 ¡Hola, ${c.nombre}! Tu jardín se sincroniza solo`);
     } catch (e) {
       console.warn('[PlantTrack] login google:', e);
-      onToast('error', 'No se pudo iniciar sesión con Google. Intentá de nuevo.');
+      const msg = e instanceof Error ? e.message : 'No se pudo iniciar sesión con Google.';
+      // cancelar el popup no es un error — solo aviso
+      onToast(msg.includes('Cancelaste') ? 'info' : 'error', msg);
     } finally {
       setCargandoSesion(false);
     }
@@ -375,7 +377,7 @@ export function AjustesView({
       <section className="rounded-3xl bg-slate-900 border border-slate-800 p-4 flex gap-3">
         <Info className="w-5 h-5 text-slate-500 shrink-0 mt-0.5" />
         <div className="text-xs text-slate-500 leading-relaxed space-y-1">
-          <p className="text-sm font-black text-slate-300">PlantTrack V2 · 1.1.0</p>
+          <p className="text-sm font-black text-slate-300">PlantTrack V2 · 1.1.1</p>
           <p>React 19 + Vite 6 + TypeScript + Tailwind 4 + Capacitor 6.</p>
           <p>Identificación botánica, cuidados, abonos y plagas potenciados por Claude (Anthropic).</p>
           <p>Hecho con 🌿 para riders de plantas — de la familia Track.</p>

@@ -53,6 +53,35 @@ export function authDisponible(): boolean {
   return firebaseListo() && !!auth;
 }
 
+/** Traduce errores técnicos de Google Auth a mensajes humanos. */
+function traducirError(e: unknown): string {
+  const cod = (e as { code?: string })?.code || '';
+  const msg = String((e as { message?: string })?.message || e || '');
+
+  // Nativo: code 10 = DEVELOPER_ERROR → casi siempre SHA-1 sin registrar
+  if (/\b10\b|DEVELOPER_ERROR/i.test(msg) || cod === '10') {
+    return 'Falta registrar la huella SHA-1 de la app en Firebase (Consola → Configuración del proyecto → Tus apps).';
+  }
+  // Nativo: server_client_id sin configurar en el build
+  if (/server_client_id|serverClientId/i.test(msg)) {
+    return 'El APK no incluye el client ID de Google — descargá la última versión.';
+  }
+  // Web: proveedor Google deshabilitado en Authentication
+  if (/configuration-not-found|operation-not-allowed/i.test(cod)) {
+    return 'Habilitá Google en Firebase → Authentication → Sign-in method.';
+  }
+  if (/popup-closed-by-user|cancel/i.test(cod)) {
+    return 'Cancelaste el inicio de sesión.';
+  }
+  if (/unauthorized-domain/i.test(cod)) {
+    return 'Este dominio no está autorizado en Firebase → Authentication → Settings.';
+  }
+  if (/network|fetch/i.test(msg)) {
+    return 'Sin conexión a internet. Revisá tu red e intentá de nuevo.';
+  }
+  return 'No se pudo iniciar sesión con Google. Intentá de nuevo.';
+}
+
 /** Login con Google — nativo en APK, popup en web. */
 export async function iniciarSesionGoogle(): Promise<CuentaUsuario> {
   if (!authDisponible()) {
@@ -62,7 +91,13 @@ export async function iniciarSesionGoogle(): Promise<CuentaUsuario> {
 
   if (Capacitor.isNativePlatform()) {
     // Fluyo nativo: el plugin devuelve el idToken de la cuenta del teléfono
-    const resultado = await GoogleAuth.signIn();
+    let resultado;
+    try {
+      resultado = await GoogleAuth.signIn();
+    } catch (e) {
+      console.warn('[PlantTrack] GoogleAuth.signIn:', e);
+      throw new Error(traducirError(e));
+    }
     const credencial = GoogleAuthProvider.credential(resultado.authentication.idToken);
     const uc = await signInWithCredential(auth!, credencial);
     return aCuentaUsuario(uc.user);
@@ -70,8 +105,13 @@ export async function iniciarSesionGoogle(): Promise<CuentaUsuario> {
 
   // Web: popup clásico
   const proveedor = new GoogleAuthProvider();
-  const uc = await signInWithPopup(auth!, proveedor);
-  return aCuentaUsuario(uc.user);
+  try {
+    const uc = await signInWithPopup(auth!, proveedor);
+    return aCuentaUsuario(uc.user);
+  } catch (e) {
+    console.warn('[PlantTrack] signInWithPopup:', e);
+    throw new Error(traducirError(e));
+  }
 }
 
 /** Cierra sesión (local + remota). Nunca lanza. */

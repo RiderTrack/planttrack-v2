@@ -20,17 +20,16 @@ import {
 import { getFirestore, type Firestore } from 'firebase/firestore';
 
 // ─────────────────────────────────────────────────────────────
-// PASO 1 AL CREAR EL PROYECTO: pegar aquí los valores del
-// archivo google-services.json que descargues de Firebase Console
-// (mismo patrón que RiderTrack v2 — firebase.ts).
+// ✅ Proyecto Firebase: planttrack-6a0e1 (plan Spark, gratis)
+// Valores del google-services.json descargado el 17-sep-2026.
 // ─────────────────────────────────────────────────────────────
 const firebaseConfig = {
-  apiKey: '',
-  authDomain: '',
-  projectId: '',
-  storageBucket: '',
-  messagingSenderId: '',
-  appId: '',
+  apiKey: 'AIzaSyCmo1uM6YZm9d5VuJ5WyoOEZJR138lSDJw',
+  authDomain: 'planttrack-6a0e1.firebaseapp.com',
+  projectId: 'planttrack-6a0e1',
+  storageBucket: 'planttrack-6a0e1.firebasestorage.app',
+  messagingSenderId: '676327457162',
+  appId: '1:676327457162:android:4d6ddb608934dc57328873',
 };
 
 // Client ID OAuth web/default (oauth_client client_type 3 del

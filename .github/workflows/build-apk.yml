@@ -107,8 +107,8 @@ jobs:
         run: |
           mkdir -p android/app/src/main/res/values
           echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">PlantTrack V2</string><string name="title_activity_main">PlantTrack V2</string><string name="package_name">com.planttrack.v2</string><string name="custom_url_scheme">com.planttrack.v2</string></resources>' > android/app/src/main/res/values/strings.xml
-          # Versión visible del APK (versionCode 5 / versionName 1.1.0)
-          sed -i 's/versionCode 1$/versionCode 5/; s/versionName "1.0"/versionName "1.1.0"/' android/app/build.gradle
+          # Versión visible del APK (versionCode 6 / versionName 1.1.1)
+          sed -i 's/versionCode 1$/versionCode 6/; s/versionName "1.0"/versionName "1.1.1"/' android/app/build.gradle
 
       # ☁️ FIREBASE (Google Auth + Firestore) — todo condicional:
       # si no hay google-services.json (ni secret ni repo), la app sale
@@ -144,6 +144,14 @@ jobs:
           # (oauth_client client_type 3 del json). One-liner para no
           # romper el block scalar de YAML con un python multi-línea.
           SERVER_CLIENT_ID=$(python3 -c "import json; d=json.load(open('google-services.json')); print(next((o['client_id'] for c in d.get('client',[]) for o in c.get('oauth_client',[]) if o.get('client_type')==3), ''))")
+          # Fallback: web client (auto creado por Google Service) del
+          # proyecto planttrack-6a0e1 — verificado en el flujo OAuth real
+          # el 17-sep-2026. El json actual no lo incluye porque se descargó
+          # antes de habilitar el proveedor Google en Authentication.
+          if [ -z "$SERVER_CLIENT_ID" ]; then
+            SERVER_CLIENT_ID="676327457162-7m0hfcsnh7vb5us0sh7pio6k5mntt301.apps.googleusercontent.com"
+            echo "ℹ️ server_client_id no está en el json — usando el web client del proyecto"
+          fi
           if [ -n "$SERVER_CLIENT_ID" ]; then
             sed -i "s|</resources>|<string name=\"server_client_id\">$SERVER_CLIENT_ID</string></resources>|" android/app/src/main/res/values/strings.xml
             echo "✅ server_client_id configurado: ${SERVER_CLIENT_ID:0:25}..."
