@@ -107,8 +107,59 @@ jobs:
         run: |
           mkdir -p android/app/src/main/res/values
           echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">PlantTrack V2</string><string name="title_activity_main">PlantTrack V2</string><string name="package_name">com.planttrack.v2</string><string name="custom_url_scheme">com.planttrack.v2</string></resources>' > android/app/src/main/res/values/strings.xml
-          # Versión visible del APK (versionCode 4 / versionName 1.0.3)
-          sed -i 's/versionCode 1$/versionCode 4/; s/versionName "1.0"/versionName "1.0.3"/' android/app/build.gradle
+          # Versión visible del APK (versionCode 5 / versionName 1.1.0)
+          sed -i 's/versionCode 1$/versionCode 5/; s/versionName "1.0"/versionName "1.1.0"/' android/app/build.gradle
+
+      # ☁️ FIREBASE (Google Auth + Firestore) — todo condicional:
+      # si no hay google-services.json (ni secret ni repo), la app sale
+      # en modo 100% local y este paso es un no-op. Cuando el proyecto
+      # Firebase exista: secret GOOGLE_SERVICES_JSON (base64 del json)
+      # o el archivo commiteado en la raíz (patrón RiderTrack v2).
+      - name: Setup Firebase (Google Auth + Firestore)
+        run: |
+          if [ -n "${{ secrets.GOOGLE_SERVICES_JSON }}" ]; then
+            echo "${{ secrets.GOOGLE_SERVICES_JSON }}" | base64 -d > google-services.json
+            echo "✅ google-services.json desde secret GOOGLE_SERVICES_JSON"
+          elif [ -f google-services.json ]; then
+            echo "ℹ️ google-services.json del repo"
+          else
+            echo "ℹ️ Sin Firebase — la app funciona en modo local (sin cuenta en la nube)"
+            exit 0
+          fi
+          cp google-services.json android/app/google-services.json
+          # Plugin gradle google-services (proyecto + módulo app)
+          PROJECT_GRADLE="android/build.gradle"
+          if ! grep -q "com.google.gms.google-services" "$PROJECT_GRADLE"; then
+            sed -i '/buildscript {/a\    repositories { google() mavenCentral() }\n    dependencies { classpath "com.google.gms:google-services:4.4.2" }' "$PROJECT_GRADLE" || true
+          fi
+          APP_GRADLE="android/app/build.gradle"
+          if ! grep -q "com.google.gms.google-services" "$APP_GRADLE"; then
+            echo 'apply plugin: "com.google.gms.google-services"' >> "$APP_GRADLE"
+          fi
+          # Dependencia nativa de Google Sign-In (patrón RiderTrack)
+          if ! grep -q "play-services-auth" "$APP_GRADLE"; then
+            sed -i '/dependencies {/a\    implementation "com.google.android.gms:play-services-auth:20.7.0"' "$APP_GRADLE"
+          fi
+          # server_client_id en strings.xml — lo lee el plugin nativo
+          # (oauth_client client_type 3 del json)
+          SERVER_CLIENT_ID=$(python3 -c "
+import json
+try:
+    d = json.load(open('google-services.json'))
+    for c in d.get('client', []):
+        for o in c.get('oauth_client', []):
+            if o.get('client_type') == 3:
+                print(o['client_id']); raise SystemExit
+except Exception:
+    pass
+print('')
+")
+          if [ -n "$SERVER_CLIENT_ID" ]; then
+            sed -i "s|</resources>|<string name=\"server_client_id\">$SERVER_CLIENT_ID</string></resources>|" android/app/src/main/res/values/strings.xml
+            echo "✅ server_client_id configurado: ${SERVER_CLIENT_ID:0:25}..."
+          else
+            echo "⚠️ oauth_client client_type 3 no encontrado — el login nativo podría fallar"
+          fi
 
       - name: Update AndroidManifest permissions
         run: |

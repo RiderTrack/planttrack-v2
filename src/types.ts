@@ -54,10 +54,12 @@ export interface FichaPlanta {
 export interface PlantaGuardada {
   id: string;
   ficha: FichaPlanta;
-  fotoDataUrl: string; // miniatura JPEG para la lista
+  fotoDataUrl: string; // miniatura JPEG para la lista (caché local, no se sincroniza)
   fechaRegistro: string; // ISO
   ultimoRiego: string; // ISO
   proximoRiego: string; // ISO calculado por frecuenciaDias
+  /** Sello de última modificación (ISO) — solo lo maneja sync.ts para merge en la nube. */
+  _mod?: string;
   notas: string;
   historialRiego: string[]; // ISOs
   modoDemo: boolean; // true si la ficha vino del modo demo

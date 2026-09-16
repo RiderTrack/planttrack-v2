@@ -18,6 +18,9 @@ import { AjustesView } from './components/AjustesView';
 import { esNativo } from './services/plataforma';
 import { hayToken } from './services/claude';
 import { useJardin } from './hooks/useJardin';
+import type { CuentaUsuario } from './services/cuenta';
+import { observarSesion } from './services/cuenta';
+import { iniciarSincronizacion, detenerSincronizacion, observarSync } from './services/sync';
 
 export default function App() {
   const [tab, setTab] = useState<NavigationTab>('inicio');
@@ -30,6 +33,27 @@ export default function App() {
   const [iaConectada, setIaConectada] = useState(hayToken());
   const refrescarIA = useCallback(() => setIaConectada(hayToken()), []);
   const jardin = useJardin();
+  // ☁️ Sesión de nube (opcional): el observer vive a nivel raíz para
+  // que el sync corra en background sin importar la pestaña activa.
+  // Si Firebase no está configurado → siempre null y no pasa nada.
+  const [cuenta, setCuenta] = useState<CuentaUsuario | null>(() => null);
+  useEffect(() => {
+    const parar = observarSesion(c => {
+      setCuenta(c);
+      if (c) iniciarSincronizacion(c.uid);
+      else detenerSincronizacion();
+    });
+    return parar;
+  }, []);
+  // Cuando el sync termina un ciclo (pull o push) → refrescar el
+  // jardín en pantalla (el pull inicial puede traer plantas nuevas).
+  useEffect(() => {
+    const parar = observarSync(estado => {
+      if (estado === 'sincronizado') jardin.refrescar();
+    });
+    return parar;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Toast global (mismo patrón que RiderTrack)
   const lanzarToast = useCallback((tipo: AvisoToast['tipo'], texto: string) => {
@@ -89,7 +113,7 @@ export default function App() {
               <ChatBotanicoView plantas={jardin.plantas} onToast={lanzarToast} onIrAjustes={() => setTab('ajustes')} />
             )}
             {tab === 'ajustes' && (
-              <AjustesView onToast={lanzarToast} onCambioIA={refrescarIA} />
+              <AjustesView onToast={lanzarToast} onCambioIA={refrescarIA} cuenta={cuenta} onCambioCuenta={setCuenta} />
             )}
           </motion.div>
         </AnimatePresence>
