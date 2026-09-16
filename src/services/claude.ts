@@ -20,15 +20,28 @@ import { FICHAS_DEMO, elegirFichaDemo } from '../data/demo';
 const API_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_VERSION = '2023-06-01';
 
-/** Modelos disponibles (Ajustes). El 4 Sonnet es el equilibrio
- *  calidad/precio para visión; el Haiku es el económico. */
+/** Modelos vigentes del lineup oficial de Anthropic (sept 2026).
+ *  ⚠️ Anthropic JUBILA modelos antiguos (Sonnet 4/3.7/3.5 murieron en
+ *  2026) — cada tanto revisar docs: platform.claude.com/docs/models-overview.
+ *  Precios por millón de tokens (entra/sale USD):
+ *  Sonnet 5 $2/$10 · Haiku 4.5 $1/$5 · Opus 5 $5/$25 · Fable 5.1 $10/$50 */
 export const MODELOS_CLAUDE = [
-  { id: 'claude-sonnet-4-20250514', nombre: 'Claude Sonnet 4 — recomendado', vista: true },
-  { id: 'claude-3-7-sonnet-20250219', nombre: 'Claude 3.7 Sonnet', vista: true },
-  { id: 'claude-3-5-haiku-20241022', nombre: 'Claude 3.5 Haiku — económico', vista: true },
+  { id: 'claude-sonnet-5', nombre: 'Claude Sonnet 5 — recomendado', vista: true },
+  { id: 'claude-haiku-4-5-20251001', nombre: 'Claude Haiku 4.5 — económico', vista: true },
+  { id: 'claude-opus-5', nombre: 'Claude Opus 5 — máximo detalle', vista: true },
+  { id: 'claude-fable-5-1', nombre: 'Claude Fable 5.1 — el más nuevo', vista: true },
 ] as const;
 
-export const MODELO_DEFAULT = 'claude-sonnet-4-20250514';
+export const MODELO_DEFAULT = 'claude-sonnet-5';
+
+/** Migración de IDs jubilados → equivalente vigente. Así nadie
+ *  queda trabado con un modelo muerto guardado en localStorage. */
+const MIGRACION_MODELOS: Record<string, string> = {
+  'claude-sonnet-4-20250514': 'claude-sonnet-5',   // jubilado 15-jun-2026
+  'claude-3-7-sonnet-20250219': 'claude-sonnet-5', // jubilado antes
+  'claude-3-5-haiku-20241022': 'claude-haiku-4-5-20251001', // jubilado
+  'claude-sonnet-4-5': 'claude-sonnet-5',
+};
 
 // ── Configuración persistente (localStorage) ────────────────
 
@@ -37,7 +50,17 @@ const LS_CONFIG = 'planttrack.ia';
 export function leerConfigIA(): ConfigIA {
   try {
     const crudo = localStorage.getItem(LS_CONFIG);
-    if (crudo) return JSON.parse(crudo) as ConfigIA;
+    if (crudo) {
+      const cfg = JSON.parse(crudo) as ConfigIA;
+      // 🩹 v1.0.3: migrar modelos jubilados (o desconocidos) al vigente
+      // más cercano — el usuario no puede quedar trabado con un modelo muerto.
+      const idsValidos = MODELOS_CLAUDE.map(m => m.id);
+      if (!idsValidos.includes(cfg.modelo as never)) {
+        cfg.modelo = MIGRACION_MODELOS[cfg.modelo] || MODELO_DEFAULT;
+        localStorage.setItem(LS_CONFIG, JSON.stringify(cfg));
+      }
+      return cfg;
+    }
   } catch { /* storage corrupto → default */ }
   return { token: '', modelo: MODELO_DEFAULT };
 }
@@ -111,7 +134,7 @@ function traducirError(msg: string): string {
   if (m.includes('overloaded') || m.includes('529'))
     return 'Los servidores de Claude están saturados — reintenta en un momento.';
   if (m.includes('not_found_error') || m.includes('model'))
-    return 'Ese modelo no existe o no tienes acceso. Cambia de modelo en Ajustes.';
+    return 'Ese modelo ya no existe en Claude (lo jubilaron). Actualizá la app o elegí otro en Ajustes.';
   if (m.includes('image is too large'))
     return 'La foto es muy pesada. Tómala desde más lejos o con menos resolución.';
   return msg.slice(0, 180);
@@ -183,7 +206,10 @@ export async function identificarPlanta(
           { type: 'text', text: 'Identifica esta planta y devuelve el JSON completo.' },
         ],
       }],
-      maxTokens: 3000,
+      // 8000: los modelos 2026 usan "adaptive thinking" (razonamiento
+      // interno que consume tokens del presupuesto) — con 3000 podía
+      // quedar corta la respuesta y venir truncada.
+      maxTokens: 8000,
     }, cfg);
     return { ok: true, texto: limpiarJSON(texto) };
   } catch (e: any) {
@@ -261,7 +287,7 @@ export async function chatearBotanica(
     const texto = await llamarClaude({
       system: SYSTEM_CHAT,
       mensajes,
-      maxTokens: 1200,
+      maxTokens: 2500,
     }, cfg);
     return { ok: true, texto };
   } catch (e: any) {
@@ -277,7 +303,9 @@ export async function probarConexion(cfg: ConfigIA): Promise<{ ok: boolean; mens
     await llamarClaude({
       system: 'Responde con una sola palabra.',
       mensajes: [{ rol: 'user', contenido: [{ type: 'text', text: 'Di: listo' }] }],
-      maxTokens: 10,
+      // 300: con adaptive thinking, 10 tokens se los comía el razonamiento
+      // interno y llegaba una respuesta SIN texto (falso "respuesta vacía").
+      maxTokens: 300,
     }, cfg);
     return { ok: true, mensaje: '✅ Conexión exitosa — Claude respondió.' };
   } catch (e: any) {
