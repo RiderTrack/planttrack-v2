@@ -1,0 +1,112 @@
+@import "tailwindcss";
+
+/* ═══════════════════════════════════════════════════════════
+   🌿 PLANTTRACK V2 — tema claro/oscuro
+   Patrón heredado de RiderTrack V2: Tailwind v4 compila cada
+   utilidad de color como variable CSS, así que invertimos la
+   paleta slate cuando <html> tiene la clase .light.
+   La app es DARK-FIRST (jardín nocturno 🌙) con acento verde
+   esmeralda; el modo .light la vuelve "invernadero diurno".
+   ═══════════════════════════════════════════════════════════ */
+
+.light {
+  /* ── Superficies (lo oscuro se vuelve claro) ── */
+  --color-slate-950: #eef6f0;   /* fondo raíz de la app */
+  --color-slate-900: #ffffff;   /* tarjetas, headers */
+  --color-slate-800: #f0f5f1;   /* tarjetas secundarias, inputs */
+  --color-slate-700: #d9e4dc;   /* bordes de tarjetas */
+  --color-slate-600: #c2d2c6;   /* bordes secundarios */
+  /* ── Texto (lo claro se vuelve tinta) ── */
+  --color-slate-500: #64748b;
+  --color-slate-400: #4f5f6e;
+  --color-slate-300: #37475a;
+  --color-slate-200: #223145;
+  --color-slate-100: #14202f;
+  --color-slate-50: #0c1622;
+
+  /* ── Acentos: se oscurecen para leerse sobre fondo claro ── */
+  --color-emerald-400: #059669;
+  --color-emerald-300: #047857;
+  --color-green-400: #16a34a;
+  --color-green-300: #15803d;
+  --color-lime-400: #4d7c0f;
+  --color-lime-300: #3f6212;
+  --color-amber-400: #b45309;
+  --color-amber-300: #92400e;
+  --color-yellow-400: #a16207;
+  --color-orange-400: #c2410c;
+  --color-rose-400: #e11d48;
+  --color-rose-300: #be123c;
+  --color-red-400: #dc2626;
+  --color-red-300: #b91c1c;
+  --color-sky-400: #0284c7;
+  --color-sky-300: #0369a1;
+  --color-cyan-400: #0891b2;
+  --color-teal-400: #0d9488;
+  --color-violet-400: #7c3aed;
+  --color-purple-400: #9333ea;
+}
+
+/* Los "text-white" que viven sobre tarjetas pasan a tinta oscura
+   en modo claro — ninguna letra se vuelve invisible */
+.light .text-white {
+  color: #10241a;
+}
+.light .hover\:text-white:hover,
+.light .group:hover .group-hover\:text-white {
+  color: #10241a;
+}
+
+/* …pero los botones con fondo de COLOR SÓLIDO conservan su
+   letra blanca (verde, ámbar, rojo…) */
+.light .bg-emerald-500, .light .bg-emerald-600, .light .bg-emerald-700,
+.light .bg-green-500, .light .bg-green-600,
+.light .bg-lime-500, .light .bg-lime-600,
+.light .bg-amber-500, .light .bg-amber-600,
+.light .bg-red-500, .light .bg-red-600,
+.light .bg-rose-500, .light .bg-rose-600,
+.light .bg-sky-500, .light .bg-sky-600 {
+  --tw-text-opacity: 1;
+}
+.light .bg-emerald-500 .text-white, .light .bg-emerald-600 .text-white,
+.light .bg-emerald-700 .text-white, .light .bg-green-600 .text-white,
+.light .bg-lime-600 .text-white, .light .bg-amber-500 .text-white,
+.light .bg-amber-600 .text-white, .light .bg-red-500 .text-white,
+.light .bg-red-600 .text-white, .light .bg-rose-600 .text-white,
+.light .bg-sky-600 .text-white {
+  color: #ffffff;
+}
+
+/* ═══ Base ═══ */
+html, body, #root {
+  height: 100%;
+}
+body {
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+/* Scrollbar discreta (estilo RiderTrack) */
+*::-webkit-scrollbar { width: 6px; height: 6px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.25); border-radius: 999px; }
+*::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.45); }
+
+/* Área segura iOS (notch) para la barra inferior */
+.pb-safe {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px));
+}
+
+/* Animación de la hoja "respirando" (loading de análisis) */
+@keyframes respirar {
+  0%, 100% { transform: scale(1) rotate(-3deg); }
+  50% { transform: scale(1.12) rotate(3deg); }
+}
+.animar-respirar { animation: respirar 1.6s ease-in-out infinite; }
+
+/* Pulso suave para el punto "IA conectada" */
+@keyframes latido {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.animar-latido { animation: latido 2s ease-in-out infinite; }

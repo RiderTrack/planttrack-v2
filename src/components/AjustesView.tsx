@@ -1,0 +1,210 @@
+// ═══════════════════════════════════════════════════════════
+// ⚙️ PLANTTRACK V2 — components/AjustesView.tsx
+// IA (token Claude + modelo + test), tema, respaldo del jardín
+// y acerca de. Firebase queda para la v2.1.
+// ═══════════════════════════════════════════════════════════
+
+import { useState } from 'react';
+import { Sparkles, Moon, Sun, MonitorSmartphone, Download, Upload, Info, Check, Loader2, CloudOff, KeyRound, ChevronDown } from 'lucide-react';
+import { useTema, type ModoTema } from '../theme/useTema';
+import {
+  MODELOS_CLAUDE, leerConfigIA, guardarConfigIA, probarConexion,
+} from '../services/claude';
+import { exportarJardin, importarJardin, listarPlantas } from '../services/jardin';
+import { useJardin } from '../hooks/useJardin';
+
+export function AjustesView({
+  onToast,
+}: {
+  onToast: (tipo: 'exito' | 'error' | 'info', texto: string) => void;
+}) {
+  const cfgInicial = leerConfigIA();
+  const [token, setToken] = useState(cfgInicial.token);
+  const [modelo, setModelo] = useState(cfgInicial.modelo);
+  const [probando, setProbando] = useState(false);
+  const [tokenVisible, setTokenVisible] = useState(false);
+  const { modo, actualizarModo } = useTema();
+  const { refrescar } = useJardin();
+
+  const guardarIA = () => {
+    guardarConfigIA({ token: token.trim(), modelo });
+    onToast('exito', '🤖 Configuración de IA guardada');
+    // recargar para que el badge del header se actualice
+    setTimeout(() => window.location.reload(), 600);
+  };
+
+  const probar = async () => {
+    setProbando(true);
+    guardarConfigIA({ token: token.trim(), modelo });
+    const r = await probarConexion({ token: token.trim(), modelo });
+    onToast(r.ok ? 'exito' : 'error', r.mensaje);
+    setProbando(false);
+  };
+
+  const exportar = () => {
+    const datos = exportarJardin();
+    const blob = new Blob([datos], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `planttrack-respaldo-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    onToast('exito', '💾 Respaldo descargado');
+  };
+
+  const importarArchivo = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/json';
+    input.onchange = () => {
+      const f = input.files?.[0];
+      if (!f) return;
+      const lector = new FileReader();
+      lector.onload = () => {
+        const r = importarJardin(String(lector.result));
+        onToast(r.ok ? 'exito' : 'error', r.mensaje);
+        if (r.ok) refrescar();
+      };
+      lector.readAsText(f);
+    };
+    input.click();
+  };
+
+  const OPCIONES_TEMA: { id: ModoTema; icono: typeof Moon; texto: string }[] = [
+    { id: 'dark', icono: Moon, texto: 'Oscuro' },
+    { id: 'light', icono: Sun, texto: 'Claro' },
+    { id: 'auto', icono: MonitorSmartphone, texto: 'Auto' },
+  ];
+
+  return (
+    <div className="space-y-4">
+      {/* ── IA de Claude ── */}
+      <section className="rounded-3xl bg-slate-900 border border-slate-800 p-4 space-y-3.5">
+        <h3 className="text-sm font-black flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-emerald-400" /> IA de Claude
+          <span className="ml-auto text-[10px] font-bold text-slate-500">uso personal</span>
+        </h3>
+
+        <div>
+          <label htmlFor="token-ia" className="text-[11px] font-black text-slate-400 uppercase tracking-wide flex items-center gap-1.5 mb-1.5">
+            <KeyRound className="w-3.5 h-3.5" /> Token de API (Anthropic)
+          </label>
+          <div className="relative">
+            <input
+              id="token-ia"
+              type={tokenVisible ? 'text' : 'password'}
+              value={token}
+              onChange={e => setToken(e.target.value)}
+              placeholder="sk-ant-api03-…"
+              autoComplete="off"
+              spellCheck={false}
+              className="w-full pl-3.5 pr-16 py-3 rounded-2xl bg-slate-800/60 border border-slate-700 text-sm font-mono placeholder:text-slate-600 focus:outline-none focus:border-emerald-600/60"
+            />
+            <button
+              onClick={() => setTokenVisible(v => !v)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-black px-2.5 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 transition"
+            >
+              {tokenVisible ? 'OCULTAR' : 'VER'}
+            </button>
+          </div>
+          <p className="text-[10px] text-slate-500 mt-1.5 leading-relaxed">
+            Se guarda SOLO en tu dispositivo (localStorage). Conseguilo en console.anthropic.com → API Keys.
+          </p>
+        </div>
+
+        <div>
+          <label htmlFor="modelo-ia" className="text-[11px] font-black text-slate-400 uppercase tracking-wide mb-1.5 block">Modelo</label>
+          <div className="relative">
+            <select
+              id="modelo-ia"
+              value={modelo}
+              onChange={e => setModelo(e.target.value)}
+              className="w-full appearance-none pl-3.5 pr-10 py-3 rounded-2xl bg-slate-800/60 border border-slate-700 text-sm font-semibold focus:outline-none focus:border-emerald-600/60"
+            >
+              {MODELOS_CLAUDE.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+            </select>
+            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2.5">
+          <button
+            onClick={probar}
+            disabled={probando}
+            className="flex items-center justify-center gap-2 py-3 rounded-2xl bg-slate-800 border border-slate-700 text-sm font-bold active:scale-[0.97] transition disabled:opacity-50"
+          >
+            {probando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4 text-emerald-400" />}
+            Probar
+          </button>
+          <button
+            onClick={guardarIA}
+            className="flex items-center justify-center gap-2 py-3 rounded-2xl bg-gradient-to-r from-emerald-400 to-emerald-600 text-white text-sm font-black active:scale-[0.97] transition shadow-lg shadow-emerald-900/40"
+          >
+            Guardar
+          </button>
+        </div>
+      </section>
+
+      {/* ── Apariencia ── */}
+      <section className="rounded-3xl bg-slate-900 border border-slate-800 p-4">
+        <h3 className="text-sm font-black mb-3">Apariencia</h3>
+        <div className="grid grid-cols-3 gap-2.5">
+          {OPCIONES_TEMA.map(({ id, icono: Icono, texto }) => (
+            <button
+              key={id}
+              onClick={() => actualizarModo(id)}
+              aria-pressed={modo === id}
+              className={`flex flex-col items-center gap-1.5 py-3 rounded-2xl border text-xs font-bold transition ${
+                modo === id
+                  ? 'bg-emerald-500/15 border-emerald-500/60 text-emerald-400'
+                  : 'bg-slate-800/50 border-slate-700 text-slate-400'
+              }`}
+            >
+              <Icono className="w-5 h-5" />
+              {texto}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {/* ── Respaldo del jardín ── */}
+      <section className="rounded-3xl bg-slate-900 border border-slate-800 p-4 space-y-3">
+        <h3 className="text-sm font-black">Respaldo del jardín</h3>
+        <p className="text-xs text-slate-500 leading-relaxed">
+          {listarPlantas().length} planta(s) guardada(s) en este dispositivo. Exportá un JSON para no perderlas si cambiás de celular.
+        </p>
+        <div className="grid grid-cols-2 gap-2.5">
+          <button onClick={exportar} className="flex items-center justify-center gap-2 py-3 rounded-2xl bg-slate-800 border border-slate-700 text-sm font-bold active:scale-[0.97] transition">
+            <Download className="w-4 h-4 text-emerald-400" /> Exportar
+          </button>
+          <button onClick={importarArchivo} className="flex items-center justify-center gap-2 py-3 rounded-2xl bg-slate-800 border border-slate-700 text-sm font-bold active:scale-[0.97] transition">
+            <Upload className="w-4 h-4 text-sky-400" /> Importar
+          </button>
+        </div>
+      </section>
+
+      {/* ── Sync en la nube (próximamente) ── */}
+      <section className="rounded-3xl bg-slate-900/60 border border-dashed border-slate-700 p-4 flex gap-3 opacity-70">
+        <CloudOff className="w-5 h-5 text-slate-500 shrink-0 mt-0.5" />
+        <div>
+          <p className="text-sm font-black text-slate-300">Sincronización en la nube</p>
+          <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+            Firebase Auth + Firestore llegarán en la v2.1 para acceder a tu jardín desde cualquier dispositivo. 🔜
+          </p>
+        </div>
+      </section>
+
+      {/* ── Acerca de ── */}
+      <section className="rounded-3xl bg-slate-900 border border-slate-800 p-4 flex gap-3">
+        <Info className="w-5 h-5 text-slate-500 shrink-0 mt-0.5" />
+        <div className="text-xs text-slate-500 leading-relaxed space-y-1">
+          <p className="text-sm font-black text-slate-300">PlantTrack V2 · 1.0.0</p>
+          <p>React 19 + Vite 6 + TypeScript + Tailwind 4 + Capacitor 6.</p>
+          <p>Identificación botánica, cuidados, abonos y plagas potenciados por Claude (Anthropic).</p>
+          <p>Hecho con 🌿 para riders de plantas — de la familia Track.</p>
+        </div>
+      </section>
+    </div>
+  );
+}

@@ -1,0 +1,23 @@
+{
+  "appId": "com.planttrack.v2",
+  "appName": "PlantTrack V2",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": true
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1500,
+      "launchAutoHide": true,
+      "backgroundColor": "#052e16",
+      "androidSplashResourceName": "splash",
+      "showSpinner": false
+    }
+  }
+}
