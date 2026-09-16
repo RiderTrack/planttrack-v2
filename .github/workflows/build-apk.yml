@@ -60,7 +60,12 @@ jobs:
         run: npm run build
 
       - name: Add Android platform
-        run: npx cap add android || true
+        run: |
+          if [ ! -d android ]; then
+            npx cap add android
+          else
+            echo "ℹ️ android/ ya existe — saltando cap add"
+          fi
 
       - name: Copy web assets to Android
         run: npx cap copy android
