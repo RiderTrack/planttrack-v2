@@ -29,19 +29,25 @@ export function AjustesView({
   const { modo, actualizarModo } = useTema();
   const { refrescar } = useJardin();
 
-  // 💾 AUTO-GUARDADO (fix 2026-09-16): el token se guarda solo, con
-  // debounce de 500ms, mientras el usuario pega/escribe. Antes, si
-  // pegabas el token y te ibas directo a Identificar SIN apretar
-  // "Guardar", el token se perdía y la app quedaba en modo demo.
+  // 💾 AUTO-GUARDADO (fix v1.0.1 del bucle infinito): el efecto
+  // depende SOLO de [token, modelo] y llama al callback vía ref —
+  // nunca por dependencia directa. En la 1.0.0 la prop onCambioIA
+  // era una función inline que cambiaba en cada render de App →
+  // este efecto se re-disparaba cada 500ms PARA SIEMPRE (bucle
+  // infinito de re-renderizados) y en Android el teclado perdía
+  // el token pegado por esa pelea. Con ref + callback estable (el
+  // refrescarIA de App usa useCallback) el bucle es imposible.
+  const onCambioIARef = useRef(onCambioIA);
+  useEffect(() => { onCambioIARef.current = onCambioIA; });
   const primerRender = useRef(true);
   useEffect(() => {
     if (primerRender.current) { primerRender.current = false; return; }
     const t = setTimeout(() => {
       guardarConfigIA({ token: token.trim(), modelo });
-      onCambioIA?.();
+      onCambioIARef.current?.();
     }, 500);
     return () => clearTimeout(t);
-  }, [token, modelo, onCambioIA]);
+  }, [token, modelo]);
 
   const guardarIA = () => {
     guardarConfigIA({ token: token.trim(), modelo });
@@ -116,10 +122,12 @@ export function AjustesView({
             <input
               id="token-ia"
               type={tokenVisible ? 'text' : 'password'}
-              value={token}
+              defaultValue={token}
               onChange={e => setToken(e.target.value)}
               placeholder="sk-ant-api03-…"
               autoComplete="off"
+              autoCapitalize="off"
+              autoCorrect="off"
               spellCheck={false}
               className="w-full pl-3.5 pr-16 py-3 rounded-2xl bg-slate-800/60 border border-slate-700 text-sm font-mono placeholder:text-slate-600 focus:outline-none focus:border-emerald-600/60"
             />
@@ -225,7 +233,7 @@ export function AjustesView({
       <section className="rounded-3xl bg-slate-900 border border-slate-800 p-4 flex gap-3">
         <Info className="w-5 h-5 text-slate-500 shrink-0 mt-0.5" />
         <div className="text-xs text-slate-500 leading-relaxed space-y-1">
-          <p className="text-sm font-black text-slate-300">PlantTrack V2 · 1.0.0</p>
+          <p className="text-sm font-black text-slate-300">PlantTrack V2 · 1.0.1</p>
           <p>React 19 + Vite 6 + TypeScript + Tailwind 4 + Capacitor 6.</p>
           <p>Identificación botánica, cuidados, abonos y plagas potenciados por Claude (Anthropic).</p>
           <p>Hecho con 🌿 para riders de plantas — de la familia Track.</p>

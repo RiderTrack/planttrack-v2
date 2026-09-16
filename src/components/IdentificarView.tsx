@@ -10,7 +10,6 @@ import { motion, AnimatePresence } from 'motion/react';
 import type { FichaPlanta, PlantaGuardada } from '../types';
 import { tomarFoto, elegirDeGaleria, type FotoPlanta } from '../services/camara';
 import { identificarPlanta, parsearFicha } from '../services/claude';
-import { hayToken } from '../services/claude';
 import { FichaPlantaCard } from './FichaPlanta';
 
 type Fase = 'lista' | 'listaConFoto' | 'analizando' | 'resultado';
@@ -18,10 +17,13 @@ type Fase = 'lista' | 'listaConFoto' | 'analizando' | 'resultado';
 export function IdentificarView({
   onGuardar,
   onToast,
+  demo,
   onIrAjustes,
 }: {
   onGuardar: (p: PlantaGuardada) => void;
   onToast: (tipo: 'exito' | 'error' | 'info', texto: string) => void;
+  /** true si no hay token — llega como prop desde App (siempre fresco). */
+  demo: boolean;
   /** Salta a Ajustes desde el aviso de modo demo. */
   onIrAjustes?: () => void;
 }) {
@@ -30,7 +32,6 @@ export function IdentificarView({
   const [ficha, setFicha] = useState<FichaPlanta | null>(null);
   const [modoDemo, setModoDemo] = useState(false);
   const [error, setError] = useState('');
-  const demo = !hayToken();
 
   const elegirFoto = async (deCamara: boolean) => {
     const f = deCamara ? await tomarFoto() : await elegirDeGaleria();

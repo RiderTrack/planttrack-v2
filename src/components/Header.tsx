@@ -7,7 +7,6 @@
 import { Sprout, Sun, Moon, Sparkles } from 'lucide-react';
 import type { NavigationTab } from '../types';
 import { useTema } from '../theme/useTema';
-import { hayToken } from '../services/claude';
 
 const TITULOS: Record<NavigationTab, string> = {
   inicio: 'Mi jardín digital',
@@ -17,9 +16,8 @@ const TITULOS: Record<NavigationTab, string> = {
   ajustes: 'Ajustes',
 };
 
-export function Header({ tab }: { tab: NavigationTab; onCambiarTab: (t: NavigationTab) => void }) {
+export function Header({ tab, conectado }: { tab: NavigationTab; conectado: boolean; onCambiarTab: (t: NavigationTab) => void }) {
   const { esClaro, actualizarModo } = useTema();
-  const conectado = hayToken();
 
   return (
     <header className="sticky top-0 z-40 bg-slate-950/85 backdrop-blur-md border-b border-slate-800/80">

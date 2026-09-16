@@ -4,7 +4,7 @@
 // Estructura heredada de RiderTrack V2 (una vista por módulo).
 // ═══════════════════════════════════════════════════════════
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { NavigationTab, AvisoToast } from './types';
 import { Header } from './components/Header';
@@ -16,14 +16,19 @@ import { JardinView } from './components/JardinView';
 import { ChatBotanicoView } from './components/ChatBotanicoView';
 import { AjustesView } from './components/AjustesView';
 import { esNativo } from './services/plataforma';
+import { hayToken } from './services/claude';
 import { useJardin } from './hooks/useJardin';
 
 export default function App() {
   const [tab, setTab] = useState<NavigationTab>('inicio');
   const [toasts, setToasts] = useState<AvisoToast[]>([]);
-  // Versión de la config de IA: al cambiar el token en Ajustes se
-  // bumpea y Header/Identificar re-leen localStorage sin recargar la app.
-  const [versionIA, setVersionIA] = useState(0);
+  // ¿Hay token de IA? Se relee cuando Ajustes lo cambia. IMPORTANTE:
+  // refrescarIA es ESTABLE (useCallback sin deps) — si fuera una función
+  // inline se recrearía en cada render y el auto-guardado de Ajustes
+  // entraría en un bucle infinito de re-renderizados (bug de la 1.0.0:
+  // en Android el teclado perdía el token pegado por esa pelea).
+  const [iaConectada, setIaConectada] = useState(hayToken());
+  const refrescarIA = useCallback(() => setIaConectada(hayToken()), []);
   const jardin = useJardin();
 
   // Toast global (mismo patrón que RiderTrack)
@@ -33,7 +38,11 @@ export default function App() {
     setTimeout(() => setToasts(ts => ts.filter(t => t.id !== id)), 3400);
   }, []);
 
-  // Arranque en APK: ocultar splash + botón "atrás" inteligente
+  // Arranque en APK: ocultar splash + botón "atrás" inteligente.
+  // El listener se registra UNA sola vez (antes se acumulaba uno por
+  // cada cambio de pestaña) y lee la pestaña actual vía ref.
+  const tabRef = useRef(tab);
+  useEffect(() => { tabRef.current = tab; }, [tab]);
   useEffect(() => {
     (async () => {
       if (!esNativo()) return;
@@ -44,19 +53,19 @@ export default function App() {
       try {
         const { App: CapApp } = await import('@capacitor/app');
         CapApp.addListener('backButton', () => {
-          if (tab !== 'inicio') setTab('inicio');
+          if (tabRef.current !== 'inicio') setTab('inicio');
           else CapApp.exitApp();
         });
       } catch { /* ok */ }
     })();
-  }, [tab]);
+  }, []);
 
   // Identificar desde Dashboard: sube a la pestaña de cámara
   const irAIdentificar = useCallback(() => setTab('identificar'), []);
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100">
-      <Header key={versionIA} tab={tab} onCambiarTab={setTab} />
+      <Header tab={tab} conectado={iaConectada} onCambiarTab={setTab} />
 
       <main className="flex-1 w-full max-w-2xl mx-auto px-4 pt-4 pb-28">
         <AnimatePresence mode="wait">
@@ -71,7 +80,7 @@ export default function App() {
               <DashboardView plantas={jardin.plantas} onIdentificar={irAIdentificar} onAbrirJardin={() => setTab('jardin')} />
             )}
             {tab === 'identificar' && (
-              <IdentificarView key={`id-${versionIA}`} onGuardar={jardin.agregar} onToast={lanzarToast} onIrAjustes={() => setTab('ajustes')} />
+              <IdentificarView onGuardar={jardin.agregar} onToast={lanzarToast} demo={!iaConectada} onIrAjustes={() => setTab('ajustes')} />
             )}
             {tab === 'jardin' && (
               <JardinView jardin={jardin} onToast={lanzarToast} />
@@ -80,7 +89,7 @@ export default function App() {
               <ChatBotanicoView plantas={jardin.plantas} onToast={lanzarToast} onIrAjustes={() => setTab('ajustes')} />
             )}
             {tab === 'ajustes' && (
-              <AjustesView onToast={lanzarToast} onCambioIA={() => setVersionIA(v => v + 1)} />
+              <AjustesView onToast={lanzarToast} onCambioIA={refrescarIA} />
             )}
           </motion.div>
         </AnimatePresence>
