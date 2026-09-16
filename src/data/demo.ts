@@ -132,3 +132,42 @@ export function elegirFichaDemo(imagenBase64: string): FichaPlanta {
   }
   return FICHAS_DEMO[Math.abs(h) % FICHAS_DEMO.length];
 }
+
+// ═══════════════════════════════════════════════════════════
+// 🧪 MODO DEMO — análisis de producto de ejemplo (v1.3).
+// Caso educativo típico: insecticida sistémico común en
+// Latinoamérica que FUNCIONA pero merece precaución.
+// ═══════════════════════════════════════════════════════════
+
+import type { AnalisisProducto } from '../types';
+
+export const PRODUCTO_DEMO: AnalisisProducto = {
+  esProducto: true,
+  nombre: 'Confidor 70 WP',
+  marca: 'Bayer',
+  tipo: 'Insecticida sistémico',
+  ingredienteActivo: 'Imidacloprid 70%',
+  paraQueSirve:
+    'Controla insectos chupadores: pulgón, mosca blanca, cochinilla y trips. La planta lo absorbe y queda protegida por dentro durante varias semanas, por eso se llama "sistémico". Es el insecticida más vendido de Latinoamérica para plagas de casa.',
+  veredicto: 'cuidado',
+  dosis: '0.3 g (una pizca pequeña, como 1/8 de cucharadita) por litro de agua. Para 2-3 plantas de maceta te sobra con 1 litro.',
+  frecuencia: 'Cada 15 días, máximo 3 aplicaciones seguidas. Luego rota a otro ingrediente para que la plaga no cree resistencia.',
+  formaAplicacion:
+    'Aspersión foliar al atardecer (evita sol directo que quema hojas mojadas). Roca bien el envés de las hojas, que es donde vive la plaga. No laves ni llueva sobre la planta en 24 h.',
+  precauciones: [
+    'Guantes y mascarilla al prepararlo; lava las manos después aunque no lo toques directo',
+    'MUY tóxico para abejas: nunca lo apliques en plantas en floración o cerca de flores que las atraigan',
+    'No lo uses en hortalizas o hierbas que vas a comer en menos de 21 días (carencia)',
+    'Aparta a mascotas y niños de la zona hasta que seque',
+    'Guarda el sobre cerrado, lejos de comida',
+  ],
+  plantasSensibles: [],
+  recomendacionJardinero:
+    'Mira: este producto SÍ mata al pulgón y a la mosca blanca, no te voy a mentir — funciona de maravilla. Pero te voy a hablar claro como tu jardinero: para 2 o 3 plantas de casa casi siempre es matar un mosquito con un cañón. Mi consejo: primero lávale las hojas con agua + jabón potásico (o lavavajillas diluido, 1 ml por litro), repite 3 días seguidos y mira. Si la plaga sigue ahí a la semana, recién saca el Confidor. Y un truco de oro: aplícalo al atardecer y apunta al envés de la hoja — la plaga vive ahí y el sol no quema la hoja mojada. Si alguna planta tuya está en floración, espera a que se pasen las flores: por las abejas.',
+  alternativasCaseras: [
+    'Jabón potásico: 1 ml de jabón (o lavavajillas suave) por litro de agua, espray cada 3 días',
+    'Aceite de neem: 5 ml por litro + 1 ml de jabón como adherente, al atardecer',
+    'Control manual: pasa un algodón con alcohol por cochinillas y ducha fuerte para pulgón',
+  ],
+  descripcionNoProducto: '',
+};

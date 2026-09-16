@@ -6,7 +6,7 @@
 // ═══════════════════════════════════════════════════════════
 
 import { useCallback, useEffect, useState } from 'react';
-import type { PlantaGuardada, Recordatorio, TipoRecordatorio, VerificacionRegional } from '../types';
+import type { PlantaGuardada, ProductoGuardado, Recordatorio, TipoRecordatorio, VerificacionRegional } from '../types';
 import {
   listarPlantas, guardarPlanta, eliminarPlanta,
   registrarRiego, ajustarFrecuencia,
@@ -16,6 +16,7 @@ import {
   alternarEtiqueta,
   registrarAltura,
   agregarRecordatorio, completarRecordatorio, eliminarRecordatorio,
+  aplicarProductoAPlanta,
 } from '../services/jardin';
 
 export function useJardin() {
@@ -101,10 +102,18 @@ export function useJardin() {
     refrescar();
   }, [refrescar]);
 
+  // ── v1.3 ──
+  const aplicarProducto = useCallback((id: string, producto: ProductoGuardado, nota?: string) => {
+    aplicarProductoAPlanta(id, producto, nota);
+    refrescar();
+  }, [refrescar]);
+
   return {
     plantas, cargando, refrescar, agregar, quitar, regar, ajustar,
     // v1.2
     editar, aplicarRegional, conFoto, sinFoto, etiqueta, medir,
     nuevoRecordatorio, hacerRecordatorio, borrarRecordatorio,
+    // v1.3
+    aplicarProducto,
   };
 }

@@ -11,6 +11,11 @@
 //  • Fotos con línea de tiempo
 //  • Recordatorios personalizados
 //  • Gamificación: XP, niveles, logros, racha
+//
+// v1.3 — CONSEJERO DE PRODUCTOS:
+//  • Foto del envase → la IA lee etiqueta e ingredientes
+//  • Veredicto, dosis y frecuencia personalizadas
+//  • Mi Botiquín + aplicaciones registradas por planta
 // ═══════════════════════════════════════════════════════════
 
 /** Pestañas de navegación principal (BottomNav). */
@@ -123,6 +128,8 @@ export interface PlantaGuardada {
   etiquetas?: string[]; // ["Interior", "Regalo de mamá"]
   fotos?: FotoPlantaGuardada[]; // línea de tiempo (local)
   recordatorios?: Recordatorio[]; // custom (abono, poda…)
+  /** v1.3: productos aplicados (insecticidas, abonos…). */
+  aplicaciones?: AplicacionProducto[];
 }
 
 /** Mensaje del chat botánico. */
@@ -195,4 +202,51 @@ export interface VerificacionRegional {
   region: string;
   nombresRegionales: NombreRegional[];
   ajustesCuidados?: string; // "en tu zona llueve más, riega menos…"
+}
+
+/** ── v1.3: Consejero de Productos ── */
+
+/** Veredicto de la IA sobre un producto de jardinería. */
+export type VeredictoProducto = 'apto' | 'cuidado' | 'no_recomendado';
+
+/** Análisis que devuelve Claude al ver la foto de un producto. */
+export interface AnalisisProducto {
+  esProducto: boolean;
+  nombre: string; // "Confidor 70 WP"
+  marca: string;
+  tipo: string; // "Insecticida sistémico", "Fertilizante foliar"…
+  ingredienteActivo: string; // "Imidacloprid 70%"
+  paraQueSirve: string;
+  veredicto: VeredictoProducto;
+  dosis: string; // "0.3 g por litro de agua"
+  frecuencia: string; // "cada 15 días, máx. 3 aplicaciones"
+  formaAplicacion: string; // "aspersión foliar al atardecer…"
+  precauciones: string[]; // seguridad (guantes, mascotas, abejas…)
+  /** Plantas del jardín del usuario que podrían sufrir con este producto. */
+  plantasSensibles: string[];
+  /** La recomendación personal, estilo "tu jardinero de confianza". */
+  recomendacionJardinero: string;
+  /** Alternativas caseras/orgánicas. */
+  alternativasCaseras: string[];
+  /** Si NO es un producto de jardinería: qué se ve en la foto. */
+  descripcionNoProducto?: string;
+}
+
+/** Producto guardado en Mi Botiquín. */
+export interface ProductoGuardado {
+  id: string;
+  analisis: AnalisisProducto;
+  fotoDataUrl: string; // miniatura del envase (caché local)
+  fechaRegistro: string; // ISO
+  modoDemo: boolean;
+  _mod?: string; // sello para futura sync en la nube
+}
+
+/** Aplicación de un producto a una planta (historial). */
+export interface AplicacionProducto {
+  id: string;
+  productoId: string;
+  productoNombre: string;
+  fecha: string; // ISO
+  nota?: string;
 }

@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import type { NavigationTab, AvisoToast } from './types';
+import type { NavigationTab, AvisoToast, ProductoGuardado } from './types';
 import { Header } from './components/Header';
 import { BottomNav } from './components/BottomNav';
 import { ToastContainer } from './components/Toast';
@@ -19,6 +19,7 @@ import { AcademiaView } from './components/AcademiaView';
 import { esNativo } from './services/plataforma';
 import { hayToken } from './services/claude';
 import { useJardin } from './hooks/useJardin';
+import { listarProductos, guardarProducto, eliminarProducto as eliminarProductoServicio } from './services/productos';
 import type { CuentaUsuario } from './services/cuenta';
 import { observarSesion } from './services/cuenta';
 import { iniciarSincronizacion, detenerSincronizacion, observarSync } from './services/sync';
@@ -36,6 +37,22 @@ export default function App() {
   const refrescarIA = useCallback(() => setIaConectada(hayToken()), []);
   const jardin = useJardin();
   const [mostrarAcademia, setMostrarAcademia] = useState(false);
+
+  // 🧪 v1.3: Mi Botiquín — estado a nivel raíz para que Identificar
+  // (guarda) y Jardín (lista/aplica) vean lo mismo sin recargar.
+  const [botiquin, setBotiquin] = useState<ProductoGuardado[]>(() => listarProductos());
+  const refrescarBotiquin = useCallback(() => setBotiquin(listarProductos()), []);
+  const guardarEnBotiquin = useCallback((p: ProductoGuardado) => {
+    guardarProducto(p);
+    refrescarBotiquin();
+  }, [refrescarBotiquin]);
+  const quitarDeBotiquin = useCallback((id: string) => {
+    eliminarProductoServicio(id);
+    refrescarBotiquin();
+  }, [refrescarBotiquin]);
+  const aplicarAPlanta = useCallback((plantaId: string, producto: ProductoGuardado) => {
+    jardin.aplicarProducto(plantaId, producto);
+  }, [jardin]);
   // 🔔 v1.2: notificaciones locales — reprogramar cuando el jardín cambia
   useEffect(() => {
     void reprogramarNotificaciones(jardin.plantas);
@@ -111,10 +128,10 @@ export default function App() {
               <DashboardView plantas={jardin.plantas} onIdentificar={irAIdentificar} onAbrirJardin={() => setTab('jardin')} onAbrirAcademia={() => setMostrarAcademia(true)} />
             )}
             {tab === 'identificar' && (
-              <IdentificarView onGuardar={jardin.agregar} onToast={lanzarToast} demo={!iaConectada} onIrAjustes={() => setTab('ajustes')} />
+              <IdentificarView onGuardar={jardin.agregar} onToast={lanzarToast} demo={!iaConectada} onIrAjustes={() => setTab('ajustes')} plantas={jardin.plantas} onGuardarProducto={guardarEnBotiquin} onAplicarProducto={aplicarAPlanta} />
             )}
             {tab === 'jardin' && (
-              <JardinView jardin={jardin} onToast={lanzarToast} />
+              <JardinView jardin={jardin} onToast={lanzarToast} botiquin={botiquin} onEliminarProducto={quitarDeBotiquin} onAplicarProducto={aplicarAPlanta} />
             )}
             {tab === 'chat' && (
               <ChatBotanicoView plantas={jardin.plantas} onToast={lanzarToast} onIrAjustes={() => setTab('ajustes')} />

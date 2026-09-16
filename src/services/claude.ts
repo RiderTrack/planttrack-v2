@@ -13,9 +13,9 @@
 // ═══════════════════════════════════════════════════════════
 
 import { CapacitorHttp } from '@capacitor/core';
-import type { ConfigIA, FichaPlanta, MensajeChat, RespuestaIA, VerificacionRegional } from '../types';
+import type { ConfigIA, FichaPlanta, MensajeChat, RespuestaIA, VerificacionRegional, AnalisisProducto } from '../types';
 import { esNativo } from './plataforma';
-import { FICHAS_DEMO, elegirFichaDemo } from '../data/demo';
+import { FICHAS_DEMO, elegirFichaDemo, PRODUCTO_DEMO } from '../data/demo';
 
 const API_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_VERSION = '2023-06-01';
@@ -403,7 +403,104 @@ export function parsearVerificacionRegional(textoJSON: string): VerificacionRegi
   }
 }
 
-// ── 4) Test de conexión (Ajustes) ───────────────────────────
+// ── 4) Consejero de Productos (v1.3) ────────────────────────
+// El usuario compra un producto (insecticida, abono, fungicida…),
+// le toma una foto a la etiqueta y la IA actúa como su jardinero
+// de confianza: lee los ingredientes, verifica si conviene para
+// SUS plantas y le dice exactamente cuánto y cómo usarlo.
+
+const SYSTEM_PRODUCTO = `Eres un agrónomo y jardinero profesional con 30 años de experiencia, experto en productos fitosanitarios y fertilizantes de uso doméstico disponibles en Latinoamérica y el mundo. El usuario te muestra la foto del envase/etiqueta de un producto que compró para sus plantas y quiere consejo honesto, como se lo daría un jardinero de confianza.
+
+Responde ÚNICAMENTE con un JSON válido (sin markdown, sin texto antes o después) con EXACTAMENTE esta estructura en español:
+
+{
+  "esProducto": boolean,
+  "nombre": "nombre comercial del producto",
+  "marca": "marca o laboratorio",
+  "tipo": "categoría: Insecticida, Fungicida, Acaricida, Herbicida, Fertilizante, Regulador de crecimiento, Sustrato, Otro",
+  "ingredienteActivo": "principio activo + concentración (ej: Imidacloprid 70%)",
+  "paraQueSirve": "2-3 frases: qué plagas/problemas controla o qué aporte da",
+  "veredicto": "apto" | "cuidado" | "no_recomendado",
+  "dosis": "dosis exacta y práctica para plantas de casa (ej: 0.3 g por litro de agua; 5 ml en 1 L)",
+  "frecuencia": "cada cuánto repetir y máximo de aplicaciones",
+  "formaAplicacion": "cómo aplicarlo bien: hora del día, donde rociar, no lavar después, etc.",
+  "precauciones": ["3-5 medidas de seguridad: guantes, mascotas, abejas, niños, cultivos comestibles, ventana abierta…"],
+  "plantasSensibles": ["nombres de las plantas del usuario que podrían dañarse con este producto — SOLO de su lista, si ninguna es sensible deja la lista vacía"],
+  "recomendacionJardinero": "3-5 frases en primera persona, cálido y directo, como tu jardinero de confianza: si vale la pena usarlo para lo que el usuario necesita, cuándo NO usarlo, y el truco de oro para que funcione",
+  "alternativasCaseras": ["2-3 alternativas orgánicas/caseras para el mismo problema"]
+}
+
+Reglas:
+- veredicto "apto": producto adecuado y seguro para jardinería doméstica con uso correcto.
+- veredicto "cuidado": funciona pero tiene riesgos (toxicidad alta, daña abejas/polen, fitotoxicidad en algunas plantas, residual en comestibles) — explica CUÁLES.
+- veredicto "no_recomendado": no sirve para plantas, es de uso agrícola intensivo prohibido en casa, o el ingrediente está vetado. Explica por qué y qué comprar en su lugar.
+- dosis: convierte la dosis de la etiqueta a medidas caseras (cucharaditas, tapas del envase, ml por litro). Si la etiqueta no se lee bien, estima la típica para ese tipo de producto y dilo en recomendacionJardinero.
+- Si la foto NO muestra un producto de jardinería: esProducto=false, nombre="No es un producto de jardín", paraQueSirve describe qué se ve, y el resto con strings vacías / listas vacías / veredicto "no_recomendado".
+- plantasSensibles: revisa UNA POR UNA las plantas del jardín del usuario (se te pasa la lista en el mensaje) y destaca las que este producto suele dañar (ej: insecticidas sistémicos y abejas si tiene floración, azufre y cucurbitáceas, herbicidas y TODO). Si el usuario no tiene plantas guardadas, lista vacía.
+- Responde SOLO el JSON.`;
+
+export async function analizarProducto(
+  imagenBase64: string, // sin el prefijo data:
+  mediaType: string,
+  contextoJardin: string, // lista de plantas del usuario (o texto vacío)
+  extra?: string, // país u otras pistas
+): Promise<RespuestaIA> {
+  const cfg = leerConfigIA();
+
+  // Modo demo (sin token): análisis de ejemplo determinístico
+  if (!cfg.token.trim()) {
+    await new Promise(r => setTimeout(r, 1600)); // simula pensar
+    return { ok: true, texto: JSON.stringify(PRODUCTO_DEMO), modoDemo: true };
+  }
+
+  try {
+    const texto = await llamarClaude({
+      system: SYSTEM_PRODUCTO,
+      mensajes: [{
+        rol: 'user',
+        contenido: [
+          { type: 'image', source: { type: 'base64', media_type: mediaType, data: imagenBase64 } },
+          { type: 'text', text: [
+            'Analiza este producto de jardinería y devuelve el JSON completo.',
+            contextoJardin.trim() ? `\nPlantas del jardín del usuario (revisa sensibilidad una por una): ${contextoJardin.trim()}` : '\nEl usuario todavía no tiene plantas guardadas en la app.',
+            extra?.trim() ? `\nContexto: ${extra.trim()}` : '',
+          ].join('') },
+        ],
+      }],
+      maxTokens: 6000,
+    }, cfg);
+    return { ok: true, texto: limpiarJSON(texto) };
+  } catch (e: any) {
+    return { ok: false, texto: '', error: e?.message || 'Error inesperado analizando el producto.' };
+  }
+}
+
+/** Parsea el análisis de producto con validación — nunca crashea. */
+export function parsearProducto(textoJSON: string): AnalisisProducto {
+  const base: AnalisisProducto = {
+    esProducto: false, nombre: '', marca: '', tipo: '',
+    ingredienteActivo: '', paraQueSirve: '', veredicto: 'cuidado',
+    dosis: '', frecuencia: '', formaAplicacion: '',
+    precauciones: [], plantasSensibles: [], recomendacionJardinero: '',
+    alternativasCaseras: [], descripcionNoProducto: '',
+  };
+  try {
+    const p = JSON.parse(textoJSON);
+    const veredictoValido = ['apto', 'cuidado', 'no_recomendado'].includes(p?.veredicto);
+    return {
+      ...base, ...p,
+      esProducto: !!p?.esProducto,
+      veredicto: veredictoValido ? p.veredicto : 'cuidado',
+      precauciones: Array.isArray(p?.precauciones) ? p.precauciones.filter((x: unknown) => typeof x === 'string').slice(0, 6) : [],
+      plantasSensibles: Array.isArray(p?.plantasSensibles) ? p.plantasSensibles.filter((x: unknown) => typeof x === 'string').slice(0, 10) : [],
+      alternativasCaseras: Array.isArray(p?.alternativasCaseras) ? p.alternativasCaseras.filter((x: unknown) => typeof x === 'string').slice(0, 4) : [],
+    } as AnalisisProducto;
+  } catch {
+    return { ...base, nombre: 'No se pudo leer la respuesta', paraQueSirve: textoJSON.slice(0, 300) };
+  }
+}
+
+// ── 5) Test de conexión (Ajustes) ───────────────────────────
 
 export async function probarConexion(cfg: ConfigIA): Promise<{ ok: boolean; mensaje: string }> {
   if (!cfg.token.trim()) return { ok: false, mensaje: 'Pega tu token primero.' };

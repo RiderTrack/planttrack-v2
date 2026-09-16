@@ -13,9 +13,11 @@
 import type {
   PlantaGuardada, FotoPlantaGuardada, Recordatorio,
   TipoRecordatorio, VerificacionRegional, MedicionAltura,
+  AplicacionProducto, ProductoGuardado,
 } from '../types';
 import { registrarRiegoCompletado, registrarActividad } from './logros';
 import { reprogramarNotificaciones } from './notificaciones';
+import { exportarBotiquin, importarBotiquin } from './productos';
 
 const LS_JARDIN = 'planttrack.jardin';
 const LS_NOTAS = 'planttrack.notas'; // id -> notas libres
@@ -250,6 +252,27 @@ export function eliminarRecordatorio(id: string, recId: string): PlantaGuardada 
   });
 }
 
+// ── v1.3: Aplicación de productos (Consejero) ──────────────
+
+/** Registra que HOY se aplicó un producto a la planta (historial). */
+export function aplicarProductoAPlanta(
+  id: string, producto: ProductoGuardado, nota?: string,
+): PlantaGuardada | undefined {
+  const aplicacion: AplicacionProducto = {
+    id: crypto.randomUUID(),
+    productoId: producto.id,
+    productoNombre: producto.analisis.nombre || 'Producto',
+    fecha: new Date().toISOString(),
+    nota: nota?.trim() || undefined,
+  };
+  const r = mapear(id, p => {
+    p.aplicaciones = [...(p.aplicaciones || []), aplicacion].slice(-40);
+    return p;
+  });
+  if (r) registrarActividad(8); // 🏆 XP por tratar a tus plantas
+  return r;
+}
+
 export { ETIQUETA_TIPO };
 
 // ── Notas (clásicas) ─────────────────────────────────────────
@@ -268,12 +291,13 @@ export function leerNotas(id: string): string {
   } catch { return ''; }
 }
 
-/** Exporta todo el jardín para respaldo (Ajustes). */
+/** Exporta todo el jardín + botiquín para respaldo (Ajustes). */
 export function exportarJardin(): string {
   return JSON.stringify({
-    version: 2,
+    version: 3,
     fecha: new Date().toISOString(),
     plantas: leerTodo(),
+    productos: exportarBotiquin(),
     notas: JSON.parse(localStorage.getItem(LS_NOTAS) || '{}'),
     progreso: localStorage.getItem('planttrack.progreso') || null,
   }, null, 2);
@@ -297,7 +321,9 @@ export function importarJardin(json: string): { ok: boolean; mensaje: string } {
     if (data.progreso) {
       try { localStorage.setItem('planttrack.progreso', data.progreso); } catch { /* ok */ }
     }
-    return { ok: true, mensaje: `Importadas ${nuevas.length} plantas nuevas.` };
+    const productosNuevos = Array.isArray(data?.productos) ? importarBotiquin(data.productos) : 0;
+    const msg = `Importadas ${nuevas.length} plantas nuevas.` + (productosNuevos > 0 ? ` Botiquín: +${productosNuevos} productos.` : '');
+    return { ok: true, mensaje: msg };
   } catch {
     return { ok: false, mensaje: 'JSON inválido — no se pudo importar.' };
   }

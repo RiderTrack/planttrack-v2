@@ -9,12 +9,14 @@ import { useMemo, useState } from 'react';
 import {
   Search, Flower2, X, Droplets, Minus, Plus, Trash2, Share2, StickyNote,
   Clock3, Tag, Camera, Pencil, Ruler, Bell, Heart, Globe2, Check, TrendingUp, ChevronRight,
+  FlaskConical, SprayCan,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import type { PlantaGuardada, TipoRecordatorio } from '../types';
+import type { PlantaGuardada, TipoRecordatorio, ProductoGuardado } from '../types';
 import type { useJardin } from '../hooks/useJardin';
 import { estadoRiego, textoRiego, formatoCorto } from '../utils/riego';
 import { FichaPlantaCard } from './FichaPlanta';
+import { ProductoCard, ProductoBotiquinCard } from './ProductoCard';
 import { guardarNotas, leerNotas, etiquetasDelJardin, ETIQUETA_TIPO } from '../services/jardin';
 import { esNativo } from '../services/plataforma';
 import { tomarFoto } from '../services/camara';
@@ -25,13 +27,22 @@ type RetornoJardin = ReturnType<typeof useJardin>;
 export function JardinView({
   jardin,
   onToast,
+  botiquin,
+  onEliminarProducto,
+  onAplicarProducto,
 }: {
   jardin: RetornoJardin;
   onToast: (tipo: 'exito' | 'error' | 'info', texto: string) => void;
+  /** v1.3: Mi Botiquín (estado raíz — compartido con Identificar). */
+  botiquin: ProductoGuardado[];
+  onEliminarProducto: (id: string) => void;
+  onAplicarProducto: (plantaId: string, producto: ProductoGuardado) => void;
 }) {
   const [busqueda, setBusqueda] = useState('');
   const [detalleId, setDetalleId] = useState<string | null>(null);
   const [etiquetaFiltro, setEtiquetaFiltro] = useState<string | null>(null);
+  const [verBotiquin, setVerBotiquin] = useState(false);
+  const [productoAbiertoId, setProductoAbiertoId] = useState<string | null>(null);
 
   const etiquetas = useMemo(() => etiquetasDelJardin(), [jardin.plantas]);
 
@@ -51,6 +62,7 @@ export function JardinView({
   }, [jardin.plantas, busqueda, etiquetaFiltro]);
 
   const detalle = detalleId ? jardin.plantas.find(p => p.id === detalleId) : null;
+  const productoAbierto = productoAbiertoId ? (botiquin.find(p => p.id === productoAbiertoId) || null) : null;
 
   if (jardin.cargando) {
     return <div className="py-16 text-center text-sm text-slate-500">Cargando jardín…</div>;
@@ -157,6 +169,41 @@ export function JardinView({
         <p className="text-center text-sm text-slate-500 py-6">Sin resultados para “{busqueda}” 🤷</p>
       )}
 
+      {/* ── 🧪 v1.3: Mi Botiquín ── */}
+      <section className="rounded-3xl bg-slate-900 border border-slate-800 overflow-hidden">
+        <button
+          onClick={() => setVerBotiquin(v => !v)}
+          className="w-full flex items-center gap-2.5 p-4"
+        >
+          <FlaskConical className="w-5 h-5 text-sky-400" />
+          <span className="text-sm font-black">Mi Botiquín</span>
+          <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-sky-500/15 border border-sky-700/50 text-sky-300">
+            {botiquin.length}
+          </span>
+          <ChevronRight className={`w-4 h-4 text-slate-500 ml-auto transition-transform ${verBotiquin ? 'rotate-90' : ''}`} />
+        </button>
+        <AnimatePresence initial={false}>
+          {verBotiquin && (
+            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+              <div className="px-4 pb-4 space-y-2">
+                {botiquin.length === 0 ? (
+                  <p className="text-[11px] text-slate-500 leading-relaxed py-1">
+                    Aún no guardas productos. En <b className="text-slate-300">Identificar → 🧪 Producto</b> le tomas foto a un insecticida o abono y la IA te dice si conviene para tus plantas, la dosis y cómo aplicarlo.
+                  </p>
+                ) : botiquin.map(prod => (
+                  <ProductoBotiquinCard
+                    key={prod.id}
+                    producto={prod}
+                    onAbrir={() => setProductoAbiertoId(prod.id)}
+                    onEliminar={() => { onEliminarProducto(prod.id); onToast('info', '🗑 Producto eliminado del botiquín'); }}
+                  />
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </section>
+
       {/* ── Detalle en pantalla completa ── */}
       <AnimatePresence>
         {detalle && (
@@ -167,6 +214,46 @@ export function JardinView({
             onCerrar={() => setDetalleId(null)}
             onToast={onToast}
           />
+        )}
+      </AnimatePresence>
+
+      {/* ── 🧪 v1.3: producto del botiquín a pantalla completa ── */}
+      <AnimatePresence>
+        {productoAbierto && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] bg-slate-950 overflow-y-auto"
+          >
+            <div className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800 px-4 py-3 flex items-center gap-3">
+              <button onClick={() => setProductoAbiertoId(null)} aria-label="Cerrar" className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center shrink-0">
+                <X className="w-5 h-5" />
+              </button>
+              <div className="min-w-0">
+                <p className="text-sm font-black truncate">{productoAbierto.analisis.nombre}</p>
+                <p className="text-[10px] text-slate-500">Análisis de la IA · {formatoCorto(productoAbierto.fechaRegistro)}</p>
+              </div>
+            </div>
+            <div className="px-4 pt-4 pb-24 max-w-2xl mx-auto">
+              <ProductoCard
+                analisis={productoAbierto.analisis}
+                foto={productoAbierto.fotoDataUrl}
+                modoDemo={productoAbierto.modoDemo}
+                plantas={jardin.plantas}
+                onAplicar={(plantaId) => {
+                  onAplicarProducto(plantaId, productoAbierto);
+                  onToast('exito', `🧪 Aplicación registrada en ${jardin.plantas.find(p => p.id === plantaId)?.apodo || jardin.plantas.find(p => p.id === plantaId)?.ficha.nombreComun || 'tu planta'}`);
+                }}
+              />
+              <button
+                onClick={() => { onEliminarProducto(productoAbierto.id); setProductoAbiertoId(null); onToast('info', '🗑 Producto eliminado del botiquín'); }}
+                className="mt-4 w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-red-950/40 border border-red-900/50 text-red-400 font-bold text-sm active:scale-[0.98] transition"
+              >
+                <Trash2 className="w-5 h-5" /> Eliminar del botiquín
+              </button>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
@@ -375,6 +462,28 @@ function DetallePlanta({
           onCompletar={recId => { jardin.hacerRecordatorio(planta.id, recId); onToast('exito', '✅ Hecho — próximo recalculado'); }}
           onEliminar={recId => jardin.borrarRecordatorio(planta.id, recId)}
         />
+
+        {/* ── 🧪 v1.3: Historial de aplicaciones ── */}
+        {(planta.aplicaciones || []).length > 0 && (
+          <section className="rounded-3xl bg-slate-900 border border-slate-800 p-4">
+            <p className="text-sm font-black flex items-center gap-2 mb-3">
+              <SprayCan className="w-4 h-4 text-sky-400" /> Productos aplicados
+              <span className="text-[10px] font-bold text-slate-500">({planta.aplicaciones!.length})</span>
+            </p>
+            <div className="space-y-2">
+              {[...planta.aplicaciones!].reverse().map(ap => (
+                <div key={ap.id} className="flex items-center gap-3 rounded-2xl bg-slate-800/50 border border-slate-700/60 p-3">
+                  <span className="w-9 h-9 rounded-xl bg-sky-950/60 border border-sky-900/50 flex items-center justify-center text-base shrink-0">🧪</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold truncate">{ap.productoNombre}</p>
+                    <p className="text-[10px] text-slate-500">{formatoCorto(ap.fecha)}{ap.nota ? ` · ${ap.nota}` : ''}</p>
+                  </div>
+                  <Check className="w-4 h-4 text-sky-400 shrink-0" />
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* ── Notas ── */}
         <section className="rounded-3xl bg-slate-900 border border-slate-800 p-4">
