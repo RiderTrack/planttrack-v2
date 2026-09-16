@@ -107,8 +107,8 @@ jobs:
         run: |
           mkdir -p android/app/src/main/res/values
           echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">PlantTrack V2</string><string name="title_activity_main">PlantTrack V2</string><string name="package_name">com.planttrack.v2</string><string name="custom_url_scheme">com.planttrack.v2</string></resources>' > android/app/src/main/res/values/strings.xml
-          # Versión visible del APK (versionCode 2 / versionName 1.0.1)
-          sed -i 's/versionCode 1$/versionCode 2/; s/versionName "1.0"/versionName "1.0.1"/' android/app/build.gradle
+          # Versión visible del APK (versionCode 3 / versionName 1.0.2)
+          sed -i 's/versionCode 1$/versionCode 3/; s/versionName "1.0"/versionName "1.0.2"/' android/app/build.gradle
 
       - name: Update AndroidManifest permissions
         run: |

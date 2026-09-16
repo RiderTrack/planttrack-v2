@@ -29,42 +29,89 @@ export function AjustesView({
   const { modo, actualizarModo } = useTema();
   const { refrescar } = useJardin();
 
-  // 💾 AUTO-GUARDADO (fix v1.0.1 del bucle infinito): el efecto
-  // depende SOLO de [token, modelo] y llama al callback vía ref —
-  // nunca por dependencia directa. En la 1.0.0 la prop onCambioIA
-  // era una función inline que cambiaba en cada render de App →
-  // este efecto se re-disparaba cada 500ms PARA SIEMPRE (bucle
-  // infinito de re-renderizados) y en Android el teclado perdía
-  // el token pegado por esa pelea. Con ref + callback estable (el
-  // refrescarIA de App usa useCallback) el bucle es imposible.
+  // 🔴 FIX v1.0.2 — "el DOM es la fuente de verdad":
+  // En Android el teclado/autollenado/gestor de contraseñas puede
+  // escribir el token en el campo SIN disparar onChange (bug real
+  // reportado: el texto quedaba visible pero React nunca se enteraba
+  // → "Sin token — modo demo" con el token pegado). Solución:
+  //  1) poll que lee el <input> del DOM cada 400ms
+  //  2) los botones Probar/Guardar leen el DOM directamente
+  //  3) sincronía extra al volver del teclado (focus/visibility)
+  const inputTokenRef = useRef<HTMLInputElement>(null);
+  const tokenRef = useRef(cfgInicial.token); // último valor REAL del campo
+  const modeloRef = useRef(cfgInicial.modelo);
+  useEffect(() => { modeloRef.current = modelo; }, [modelo]);
   const onCambioIARef = useRef(onCambioIA);
   useEffect(() => { onCambioIARef.current = onCambioIA; });
+  const guardadoPendiente = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  /** Escribe la config en localStorage y avisa a App. Usa solo refs
+   *  → siempre lee valores frescos aunque la llame el closure del
+   *  poll del mount. */
+  const persistirAhora = () => {
+    clearTimeout(guardadoPendiente.current);
+    guardarConfigIA({ token: tokenRef.current.trim(), modelo: modeloRef.current });
+    onCambioIARef.current?.();
+  };
+
+  /** Lee el valor REAL del <input> (aunque Android lo haya llenado
+   *  sin eventos) y sincroniza estado + guardado con debounce. */
+  const sincronizarToken = (inmediato = false) => {
+    const dom = inputTokenRef.current?.value ?? '';
+    if (dom === tokenRef.current) return; // sin cambios reales
+    tokenRef.current = dom;
+    setToken(dom);
+    clearTimeout(guardadoPendiente.current);
+    guardadoPendiente.current = setTimeout(persistirAhora, inmediato ? 0 : 400);
+  };
+  const sincronizarRef = useRef(sincronizarToken);
+  useEffect(() => { sincronizarRef.current = sincronizarToken; });
+
+  // Poll a prueba de autollenado + sincronía al volver del teclado
+  useEffect(() => {
+    const id = setInterval(() => sincronizarRef.current(), 400);
+    const alVolver = () => sincronizarRef.current();
+    document.addEventListener('visibilitychange', alVolver);
+    window.addEventListener('focus', alVolver);
+    window.addEventListener('pageshow', alVolver);
+    return () => {
+      clearInterval(id);
+      clearTimeout(guardadoPendiente.current);
+      document.removeEventListener('visibilitychange', alVolver);
+      window.removeEventListener('focus', alVolver);
+      window.removeEventListener('pageshow', alVolver);
+    };
+  }, []);
+
+  // Cambio de modelo → persistir al toque
   const primerRender = useRef(true);
   useEffect(() => {
     if (primerRender.current) { primerRender.current = false; return; }
-    const t = setTimeout(() => {
-      guardarConfigIA({ token: token.trim(), modelo });
-      onCambioIARef.current?.();
-    }, 500);
-    return () => clearTimeout(t);
-  }, [token, modelo]);
+    persistirAhora();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modelo]);
 
+  // Ambos botones leen el DOM directamente: nunca fallan aunque el
+  // texto haya llegado sin eventos (caso autollenado de Android).
   const guardarIA = () => {
-    guardarConfigIA({ token: token.trim(), modelo });
-    onCambioIA?.();
-    onToast('exito', token.trim() ? '🤖 Token guardado — IA activa' : '🤖 Token vacío — modo demo');
+    const dom = inputTokenRef.current?.value ?? '';
+    tokenRef.current = dom;
+    setToken(dom);
+    persistirAhora();
+    onToast('exito', dom.trim() ? '🤖 Token guardado — IA activa' : '🤖 Token vacío — modo demo');
   };
 
   const probar = async () => {
-    setProbando(true);
-    guardarConfigIA({ token: token.trim(), modelo });
-    onCambioIA?.();
-    if (!token.trim()) {
+    const dom = (inputTokenRef.current?.value ?? '').trim();
+    if (!dom) {
       onToast('error', 'Pega tu token primero.');
-      setProbando(false);
       return;
     }
-    const r = await probarConexion({ token: token.trim(), modelo });
+    tokenRef.current = inputTokenRef.current?.value ?? '';
+    setToken(tokenRef.current);
+    persistirAhora();
+    setProbando(true);
+    const r = await probarConexion({ token: dom, modelo: modeloRef.current });
     onToast(r.ok ? 'exito' : 'error', r.mensaje);
     setProbando(false);
   };
@@ -121,9 +168,12 @@ export function AjustesView({
           <div className="relative">
             <input
               id="token-ia"
+              ref={inputTokenRef}
               type={tokenVisible ? 'text' : 'password'}
               defaultValue={token}
-              onChange={e => setToken(e.target.value)}
+              onChange={() => sincronizarRef.current()}
+              onBlur={() => sincronizarRef.current()}
+              onPaste={() => setTimeout(() => sincronizarRef.current(true), 0)}
               placeholder="sk-ant-api03-…"
               autoComplete="off"
               autoCapitalize="off"
@@ -143,7 +193,9 @@ export function AjustesView({
           </p>
           <div className={`mt-2 flex items-center gap-2 text-[11px] font-bold ${token.trim().length > 10 ? 'text-emerald-400' : 'text-amber-400'}`}>
             <span className={`w-2 h-2 rounded-full ${token.trim().length > 10 ? 'bg-emerald-400 animar-latido' : 'bg-amber-400'}`} />
-            {token.trim().length > 10 ? 'Token detectado — IA activa en esta app' : 'Sin token — modo demo activo'}
+            {token.trim().length > 10
+              ? `Token detectado (${token.trim().length} caracteres) — IA activa en esta app`
+              : 'Sin token — modo demo activo'}
           </div>
         </div>
 
@@ -233,7 +285,7 @@ export function AjustesView({
       <section className="rounded-3xl bg-slate-900 border border-slate-800 p-4 flex gap-3">
         <Info className="w-5 h-5 text-slate-500 shrink-0 mt-0.5" />
         <div className="text-xs text-slate-500 leading-relaxed space-y-1">
-          <p className="text-sm font-black text-slate-300">PlantTrack V2 · 1.0.1</p>
+          <p className="text-sm font-black text-slate-300">PlantTrack V2 · 1.0.2</p>
           <p>React 19 + Vite 6 + TypeScript + Tailwind 4 + Capacitor 6.</p>
           <p>Identificación botánica, cuidados, abonos y plagas potenciados por Claude (Anthropic).</p>
           <p>Hecho con 🌿 para riders de plantas — de la familia Track.</p>
