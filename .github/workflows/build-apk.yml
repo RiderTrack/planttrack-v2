@@ -27,8 +27,31 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      # 🩹 FIX (2026-09-16): android-actions/setup-android se rompió porque
+      # Google ELIMINÓ el paquete legacy 'tools' de su repositorio
+      # ("Failed to find package 'tools'" → exit code 1). Afecta a v3 y v4.
+      # El runner ubuntu-latest YA trae el Android SDK completo preinstalado
+      # (ANDROID_HOME, platform-tools, build-tools, android-34/35, licencias),
+      # así que usamos el SDK del runner directamente + instalación defensiva
+      # de los componentes exactos que necesita Capacitor 6 (compileSdk 34).
+      - name: Setup Android SDK (preinstalado en el runner)
+        run: |
+          export ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager 2>/dev/null | head -1)"
+          fi
+          echo "sdkmanager en: $SDKMANAGER"
+          # Licencias (defensivo: no rompe el build si falla la red)
+          yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
+          # Componentes de Capacitor 6 — idempotente: si ya están, es no-op
+          yes | "$SDKMANAGER" --install "platforms;android-34" "build-tools;34.0.0" "platform-tools" > /dev/null 2>&1 \
+            || echo "⚠️ sdkmanager install falló — confiando en componentes preinstalados"
+          echo "✅ Plataformas disponibles:" && ls "$ANDROID_HOME/platforms" 2>/dev/null || true
+          echo "✅ Build-tools disponibles:" && ls "$ANDROID_HOME/build-tools" 2>/dev/null || true
 
       - name: Install dependencies
         run: npm install
