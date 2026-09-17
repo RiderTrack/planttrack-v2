@@ -28,10 +28,32 @@ function escribirCache(c: InfoClima): void {
   try { localStorage.setItem(LS_CLIMA, JSON.stringify(c)); } catch { /* lleno */ }
 }
 
-/** Pide las coordenadas: plugin nativo (APK) o API del navegador (web). */
+/**
+ * Pide las coordenadas: plugin nativo (APK) o API del navegador (web).
+ * v1.4.1: en Android/iOS se pide el permiso EXPLÍCITAMENTE antes de
+ * ubicar — así el diálogo del sistema aparece al tocar "Activar".
+ * (El manifest del APK ya declara ACCESS_COARSE/FINE_LOCATION.)
+ */
 async function coordenadas(): Promise<{ lat: number; lon: number } | null> {
   try {
     const { Geolocation } = await import('@capacitor/geolocation');
+
+    // Nativo: verificar y pedir el permiso antes de ubicar.
+    // ('location' cubre COARSE+FINE en Android; en Android 12+ el
+    // usuario puede elegir ubicación aproximada → coarseLocation.)
+    const concedido = (p: { location: string; coarseLocation: string }) =>
+      p.location === 'granted' || p.coarseLocation === 'granted';
+    try {
+      const perm = await Geolocation.checkPermissions();
+      if (!concedido(perm)) {
+        const req = await Geolocation.requestPermissions();
+        if (!concedido(req)) return null;
+      }
+    } catch {
+      // Web: requestPermissions lanza "not implemented" — el
+      // navegador pedirá el permiso al llamar getCurrentPosition.
+    }
+
     const pos = await Geolocation.getCurrentPosition({
       enableHighAccuracy: false,
       timeout: 10000,

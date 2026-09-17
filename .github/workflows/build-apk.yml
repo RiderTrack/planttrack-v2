@@ -134,8 +134,8 @@ jobs:
         run: |
           mkdir -p android/app/src/main/res/values
           echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">PlantTrack V2</string><string name="title_activity_main">PlantTrack V2</string><string name="package_name">com.planttrack.v2</string><string name="custom_url_scheme">com.planttrack.v2</string><string name="widget_desc">Tus plantas y el próximo riego en el escritorio</string></resources>' > android/app/src/main/res/values/strings.xml
-          # Versión visible del APK (versionCode 10 / versionName 1.4.0)
-          sed -i 's/versionCode 1$/versionCode 10/; s/versionName "1.0"/versionName "1.4.0"/' android/app/build.gradle
+          # Versión visible del APK (versionCode 11 / versionName 1.4.1)
+          sed -i 's/versionCode 1$/versionCode 11/; s/versionName "1.0"/versionName "1.4.1"/' android/app/build.gradle
 
       # ☁️ FIREBASE (Google Auth + Firestore) — todo condicional:
       # si no hay google-services.json (ni secret ni repo), la app sale
@@ -189,7 +189,12 @@ jobs:
       - name: Update AndroidManifest permissions
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-          sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />\n    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />\n    <uses-permission android:name="android.permission.VIBRATE" />\n    <application|' "$MANIFEST"
+          # 📍 v1.4.1 FIX: ACCESS_COARSE/FINE_LOCATION eran necesarios para
+          # el clima inteligente (@capacitor/geolocation NO los declara solo
+          # en su propio manifest). Sin esta declaración Android OCULTA el
+          # permiso en Ajustes y bloquea el diálogo sin preguntar.
+          sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />\n    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />\n    <uses-permission android:name="android.permission.VIBRATE" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-feature android:name="android.hardware.location.gps" android:required="false" />\n    <application|' "$MANIFEST"
+          echo "✅ Permisos en el manifest:" && grep -c "uses-permission" "$MANIFEST"
 
       - name: Set Gradle permissions
         run: chmod +x android/gradlew

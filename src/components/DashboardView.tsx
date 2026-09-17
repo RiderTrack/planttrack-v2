@@ -69,7 +69,9 @@ export function DashboardView({
     setClima(r.clima);
     setErrorClima(r.error);
     setCargandoClima(false);
-    if (r.error === 'permiso') onToast('info', 'Activa la ubicación para el clima (permiso del navegador/sistema)');
+    if (r.error === 'permiso') {
+      onToast('info', '📍 Toca «Mientras usas la app» — si ya no pregunta: Ajustes → Apps → PlantTrack → Permisos → Ubicación');
+    }
   };
 
   // 🧳 v1.4: modo vacaciones
@@ -208,14 +210,30 @@ export function DashboardView({
       {/* Stats rápidas */}
       <section className="grid grid-cols-3 gap-3" aria-label="Resumen del jardín">
         {[
-          { icono: Flower2, valor: plantas.length, texto: 'Plantas', color: 'text-emerald-400' },
-          { icono: Bug, valor: stats.especies, texto: 'Especies', color: 'text-lime-400' },
-          { icono: CalendarClock, valor: stats.vencidas + stats.hoy, texto: 'Riegos ya!', color: (stats.vencidas + stats.hoy) > 0 ? 'text-amber-400' : 'text-sky-400' },
-        ].map(({ icono: Icono, valor, texto, color }) => (
+          {
+            icono: Flower2, valor: plantas.length, texto: 'Plantas', color: 'text-emerald-400',
+            detalle: 'en tu jardín', detalleColor: 'text-slate-500',
+          },
+          {
+            icono: Bug, valor: stats.especies, texto: 'Especies', color: 'text-lime-400',
+            detalle: 'variedades', detalleColor: 'text-slate-500',
+          },
+          {
+            icono: CalendarClock,
+            valor: stats.vencidas + stats.hoy,
+            texto: 'Por regar',
+            color: (stats.vencidas + stats.hoy) > 0 ? 'text-amber-400' : 'text-emerald-400',
+            detalle: stats.vencidas > 0
+              ? `${stats.vencidas} vencida${stats.vencidas === 1 ? '' : 's'} · ${stats.hoy} hoy`
+              : stats.hoy > 0 ? 'toca hoy' : 'todo al día 🌿',
+            detalleColor: stats.vencidas > 0 ? 'text-red-400' : stats.hoy > 0 ? 'text-amber-400' : 'text-emerald-400',
+          },
+        ].map(({ icono: Icono, valor, texto, color, detalle, detalleColor }) => (
           <div key={texto} className="rounded-2xl p-3.5 bg-slate-900 border border-slate-800 text-center">
             <Icono className={`w-5 h-5 mx-auto ${color}`} />
             <p className="text-xl font-black mt-1.5 leading-none">{valor}</p>
             <p className="text-[10px] text-slate-500 font-bold mt-1 uppercase tracking-wide">{texto}</p>
+            <p className={`text-[9px] font-bold mt-1 leading-tight ${detalleColor}`}>{detalle}</p>
           </div>
         ))}
       </section>
@@ -301,7 +319,7 @@ export function DashboardView({
             <p className="text-sm font-bold">Clima inteligente</p>
             <p className="text-[11px] text-slate-500 leading-relaxed mt-0.5">
               {errorClima === 'permiso'
-                ? 'Activa la ubicación y PlantTrack ajusta tus riegos con el pronóstico real de tu zona.'
+                ? 'Toca Activar y acepta el permiso de ubicación para el pronóstico de tu zona. Si Android ya no pregunta: Ajustes → Apps → PlantTrack → Permisos → Ubicación.'
                 : 'Sin datos del clima ahora — reintenta cuando tengas conexión.'}
             </p>
           </div>
