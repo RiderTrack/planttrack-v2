@@ -138,10 +138,12 @@ const LOGROS: Logro[] = [
   { id: 'fotografo', icono: '📸', titulo: 'Fotógrafo botánico', descripcion: 'Agrega 10 fotos a tus plantas', progreso: c => Math.min(1, c.fotosTotales / 10) },
   { id: 'superviviente', icono: '🛡️', titulo: 'Nada me mata', descripcion: 'Una planta contigo 90+ días', progreso: c => Math.min(1, c.plantasVivas / 90) },
   { id: 'explorador-regional', icono: '🌶️', titulo: 'Raíces locales', descripcion: 'Confirma un nombre regional de una planta (¡ají charapita!)', progreso: c => Math.min(1, (c as any).regionales / 1) },
+  { id: 'propagador', icono: '🌱', titulo: 'Propagador', descripcion: 'Enraiza tu primer esqueje en Mis Esquejes', progreso: c => Math.min(1, (c as any).esquejesEnraizados / 1) },
+  { id: 'generoso', icono: '🎁', titulo: 'Jardinero generoso', descripcion: 'Regala un esqueje enraizado a alguien', progreso: c => Math.min(1, (c as any).esquejesRegalados / 1) },
 ];
 
 /** Contexto calculado desde el jardín + progreso. */
-export function contextoActual(plantas: PlantaGuardada[]): ContextoLogros & { regionales: number } {
+export function contextoActual(plantas: PlantaGuardada[]): ContextoLogros & { regionales: number; esquejesEnraizados: number; esquejesRegalados: number } {
   const progreso = leerProgreso();
   const especies = new Set(plantas.map(p => p.ficha.nombreCientifico?.toLowerCase() || p.ficha.nombreComun)).size;
   const fotosTotales = plantas.reduce((n, p) => n + (p.fotos?.length || 0), 0);
@@ -149,6 +151,17 @@ export function contextoActual(plantas: PlantaGuardada[]): ContextoLogros & { re
     ? Math.max(...plantas.map(p => Math.floor((Date.now() - new Date(p.fechaAdopcion || p.fechaRegistro).getTime()) / 86400000)))
     : 0;
   const regionales = plantas.filter(p => p.ficha.nombreLocal).length;
+  // esquejes: lectura directa de localStorage (evita import circular con esquejes.ts)
+  let esquejesEnraizados = 0;
+  let esquejesRegalados = 0;
+  try {
+    const crudos = localStorage.getItem('planttrack.esquejes');
+    if (crudos) {
+      const lista = JSON.parse(crudos) as { estado?: string }[];
+      esquejesEnraizados = lista.filter(e => e.estado === 'enraizado' || e.estado === 'plantado').length;
+      esquejesRegalados = lista.filter(e => e.estado === 'regalado').length;
+    }
+  } catch { /* ok */ }
   return {
     plantas: plantas.length,
     especies,
@@ -158,6 +171,8 @@ export function contextoActual(plantas: PlantaGuardada[]): ContextoLogros & { re
     fotosTotales,
     plantasVivas,
     regionales,
+    esquejesEnraizados,
+    esquejesRegalados,
   };
 }
 

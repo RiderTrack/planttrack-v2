@@ -9,23 +9,32 @@ import { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   X, ChevronRight, ChevronLeft, Check, Clock3, Search, BookOpen,
-  GraduationCap, Lightbulb, Trophy,
+  GraduationCap, Lightbulb, Trophy, Bug, Sprout,
 } from 'lucide-react';
 import { CURSOS, NIVEL_CURSO, type Leccion } from '../data/lecciones';
 import { GLOSARIO } from '../data/glosario';
 import { completarLeccion, estaCompleta } from '../services/academia';
 import { leccionesCompletadas } from '../services/academia';
+import { TabPlagas } from './TabPlagas';
+import { TabSiembra } from './TabSiembra';
+import { leerConfigIA } from '../services/claude';
 
-type Pestaña = 'lecciones' | 'glosario';
+type Pestaña = 'lecciones' | 'glosario' | 'plagas' | 'siembra';
 
 export function AcademiaView({
   onCerrar,
   onToast,
+  pestannaInicial,
+  onDiagnosticar,
 }: {
   onCerrar: () => void;
   onToast: (tipo: 'exito' | 'error' | 'info', texto: string) => void;
+  /** v1.4: pestaña de arranque (ej: abrir directo en Plagas desde el diagnóstico). */
+  pestannaInicial?: Pestaña;
+  /** v1.4: abrir la cámara de diagnóstico de plagas (cierra la academia). */
+  onDiagnosticar?: () => void;
 }) {
-  const [pestanna, setPestanna] = useState<Pestaña>('lecciones');
+  const [pestanna, setPestanna] = useState<Pestaña>(pestannaInicial || 'lecciones');
   const [leccionAbierta, setLeccionAbierta] = useState<{ curso: string; leccion: Leccion } | null>(null);
   const [, forzar] = useState(0);
   const completadas = leccionesCompletadas();
@@ -146,15 +155,17 @@ export function AcademiaView({
 
       <div className="max-w-2xl mx-auto px-4 py-4 pb-10 space-y-4">
         {/* Pestañas */}
-        <div className="grid grid-cols-2 gap-2 p-1 rounded-2xl bg-slate-900 border border-slate-800">
+        <div className="grid grid-cols-4 gap-1.5 p-1 rounded-2xl bg-slate-900 border border-slate-800">
           {([
-            { id: 'lecciones' as Pestaña, texto: 'Lecciones', icono: BookOpen },
+            { id: 'lecciones' as Pestaña, texto: 'Clases', icono: BookOpen },
+            { id: 'plagas' as Pestaña, texto: 'Plagas', icono: Bug },
+            { id: 'siembra' as Pestaña, texto: 'Siembra', icono: Sprout },
             { id: 'glosario' as Pestaña, texto: 'Glosario', icono: Search },
           ]).map(({ id, texto, icono: Icono }) => (
             <button
               key={id}
               onClick={() => setPestanna(id)}
-              className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-black transition ${
+              className={`flex flex-col items-center justify-center gap-0.5 py-2.5 rounded-xl text-[10px] font-black transition ${
                 pestanna === id ? 'bg-indigo-500/20 text-indigo-300' : 'text-slate-400'
               }`}
             >
@@ -234,6 +245,10 @@ export function AcademiaView({
                 </div>
               )}
             </motion.div>
+          ) : pestanna === 'plagas' ? (
+            <TabPlagas onDiagnosticar={() => { onCerrar(); onDiagnosticar?.(); }} />
+          ) : pestanna === 'siembra' ? (
+            <TabSiembra pais={leerConfigIA().pais || ''} />
           ) : (
             <GlosarioTab />
           )}

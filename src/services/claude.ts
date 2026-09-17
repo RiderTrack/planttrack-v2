@@ -13,9 +13,9 @@
 // ═══════════════════════════════════════════════════════════
 
 import { CapacitorHttp } from '@capacitor/core';
-import type { ConfigIA, FichaPlanta, MensajeChat, RespuestaIA, VerificacionRegional, AnalisisProducto } from '../types';
+import type { ConfigIA, FichaPlanta, MensajeChat, RespuestaIA, VerificacionRegional, AnalisisProducto, DiagnosticoPlaga } from '../types';
 import { esNativo } from './plataforma';
-import { FICHAS_DEMO, elegirFichaDemo, PRODUCTO_DEMO } from '../data/demo';
+import { FICHAS_DEMO, elegirFichaDemo, PRODUCTO_DEMO, PLAGA_DEMO } from '../data/demo';
 
 const API_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_VERSION = '2023-06-01';
@@ -500,7 +500,101 @@ export function parsearProducto(textoJSON: string): AnalisisProducto {
   }
 }
 
-// ── 5) Test de conexión (Ajustes) ───────────────────────────
+// ── 5) Diagnóstico de plagas por foto (v1.4) ───────────────
+// El usuario le toma una foto a la planta enferma y la IA
+// actúa como fitopatóloga: identifica el problema, su gravedad
+// y arma el plan de tratamiento paso a paso.
+
+const SYSTEM_PLAGA = `Eres una fitóloga/agrónoma experta en plagas y enfermedades de plantas con 30 años de experiencia, especializada en jardinería doméstica y huertos urbanos de Latinoamérica y el mundo. El usuario te muestra la foto de una planta que le preocupa y quiere saber qué tiene y cómo salvarla.
+
+Responde ÚNICAMENTE con un JSON válido (sin markdown, sin texto antes o después) con EXACTAMENTE esta estructura en español:
+
+{
+  "esPlanta": boolean,
+  "problemaDetectado": boolean,
+  "plagaProbable": "nombre del problema (plaga, enfermedad, o carencia). Si la planta está sana: 'Sin problemas visibles'",
+  "confianza": number entre 0 y 100,
+  "sintomasDetectados": ["2-4 señales que ves en la foto, específicas"],
+  "gravedad": "leve" | "moderada" | "grave",
+  "afectaA": ["nombres de las plantas del jardín del usuario que podrían contagiarse si es contagioso — SOLO de su lista, sino lista vacía"],
+  "plan": ["3-6 pasos inmediatos en orden de ejecución, concretos y caseros primero"],
+  "productoSugerido": "tipo de producto a comprar si hace falta (ej: 'insecticida sistémico', 'fungicida cúprico') — sin marcas",
+  "alternativaCasera": "la solución casera/orgánica completa con medidas",
+  "prevencion": "cómo evitar que vuelva a pasar, 1-2 frases",
+  "explicacion": "2-3 frases en tono maestro: QUÉ le pasa a la planta y PORQUÉ, para que el usuario aprenda (ej: 'las hojas amarillas de abajo son normales: la planta recicla...')"
+}
+
+Reglas:
+- Si la foto NO contiene una planta: esPlanta=false, problemaDetectado=false, plagaProbable="", y en explicacion di qué se ve.
+- Si la planta se ve SANA: problemaDetectado=false, plagaProbable="Sin problemas visibles", gravedad="leve", plan=[], y en explicacion felicita y señala algún cuidado preventivo según la especie que reconozcas.
+- Distingue plagas (bichos) de enfermedades (hongos/virus/bacterias) de problemas ambientales (exceso de agua, quemadura de sol, falta de luz) — el diagnóstico correcto cambia todo el tratamiento.
+- Si dudas entre dos diagnósticos, elige el más probable, baja la confianza y menciona la alternativa en explicacion.
+- Los pasos del plan deben ser ejecutables HOY con cosas de casa, salvo que el problema realmente requiera producto.
+- afectaA: revisa las plantas del usuario (se te pasa la lista) y marca las que podrían contagiarse por cercanía o especie. Si no hay riesgo de contagio, lista vacía.
+- Responde SOLO el JSON.`;
+
+export async function diagnosticarPlaga(
+  imagenBase64: string, // sin el prefijo data:
+  mediaType: string,
+  contextoJardin: string, // lista de plantas del usuario (o vacío)
+  extra?: string, // país u otras pistas
+): Promise<RespuestaIA> {
+  const cfg = leerConfigIA();
+
+  // Modo demo (sin token): diagnóstico de ejemplo determinístico
+  if (!cfg.token.trim()) {
+    await new Promise(r => setTimeout(r, 1600)); // simula pensar
+    return { ok: true, texto: JSON.stringify(PLAGA_DEMO), modoDemo: true };
+  }
+
+  try {
+    const texto = await llamarClaude({
+      system: SYSTEM_PLAGA,
+      mensajes: [{
+        rol: 'user',
+        contenido: [
+          { type: 'image', source: { type: 'base64', media_type: mediaType, data: imagenBase64 } },
+          { type: 'text', text: [
+            'Mi planta tiene algo raro. Diagnostic qué tiene y devuelve el JSON completo.',
+            contextoJardin.trim() ? `\nPlantas que tengo cerca (revisa riesgo de contagio): ${contextoJardin.trim()}` : '\nNo tengo otras plantas guardadas en la app.',
+            extra?.trim() ? `\nContexto: ${extra.trim()}` : '',
+          ].join('') },
+        ],
+      }],
+      maxTokens: 5000,
+    }, cfg);
+    return { ok: true, texto: limpiarJSON(texto) };
+  } catch (e: any) {
+    return { ok: false, texto: '', error: e?.message || 'Error inesperado diagnosticando la plaga.' };
+  }
+}
+
+/** Parsea el diagnóstico con validación — nunca crashea. */
+export function parsearDiagnostico(textoJSON: string): DiagnosticoPlaga {
+  const base: DiagnosticoPlaga = {
+    esPlanta: false, problemaDetectado: false, plagaProbable: '', confianza: 0,
+    sintomasDetectados: [], gravedad: 'leve', afectaA: [], plan: [],
+    productoSugerido: '', alternativaCasera: '', prevencion: '', explicacion: '',
+  };
+  try {
+    const d = JSON.parse(textoJSON);
+    const gravedadValida = ['leve', 'moderada', 'grave'].includes(d?.gravedad);
+    return {
+      ...base, ...d,
+      esPlanta: !!d?.esPlanta,
+      problemaDetectado: !!d?.problemaDetectado,
+      confianza: Math.max(0, Math.min(100, Number(d?.confianza) || 0)),
+      gravedad: gravedadValida ? d.gravedad : 'leve',
+      sintomasDetectados: Array.isArray(d?.sintomasDetectados) ? d.sintomasDetectados.filter((x: unknown) => typeof x === 'string').slice(0, 5) : [],
+      afectaA: Array.isArray(d?.afectaA) ? d.afectaA.filter((x: unknown) => typeof x === 'string').slice(0, 10) : [],
+      plan: Array.isArray(d?.plan) ? d.plan.filter((x: unknown) => typeof x === 'string').slice(0, 6) : [],
+    } as DiagnosticoPlaga;
+  } catch {
+    return { ...base, explicacion: textoJSON.slice(0, 300) };
+  }
+}
+
+// ── 6) Test de conexión (Ajustes) ───────────────────────────
 
 export async function probarConexion(cfg: ConfigIA): Promise<{ ok: boolean; mensaje: string }> {
   if (!cfg.token.trim()) return { ok: false, mensaje: 'Pega tu token primero.' };

@@ -13,17 +13,18 @@
 // ═══════════════════════════════════════════════════════════
 
 import { useState } from 'react';
-import { Camera, ImagePlus, ScanSearch, RefreshCcw, Sprout, TriangleAlert, Save, Sparkles, Settings2, Globe2, Loader2, Check, X, FlaskConical, PackageOpen } from 'lucide-react';
+import { Camera, ImagePlus, ScanSearch, RefreshCcw, Sprout, TriangleAlert, Save, Sparkles, Settings2, Globe2, Loader2, Check, X, FlaskConical, PackageOpen, Bug, Stethoscope } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import type { FichaPlanta, PlantaGuardada, ProductoGuardado, VerificacionRegional, AnalisisProducto } from '../types';
+import type { FichaPlanta, PlantaGuardada, ProductoGuardado, VerificacionRegional, AnalisisProducto, DiagnosticoPlaga } from '../types';
 import { tomarFoto, elegirDeGaleria, type FotoPlanta } from '../services/camara';
-import { identificarPlanta, parsearFicha, verificarNombreRegional, parsearVerificacionRegional, leerConfigIA, analizarProducto, parsearProducto } from '../services/claude';
+import { identificarPlanta, parsearFicha, verificarNombreRegional, parsearVerificacionRegional, leerConfigIA, analizarProducto, parsearProducto, diagnosticarPlaga, parsearDiagnostico } from '../services/claude';
 import { aplicarRegionalAFicha } from '../services/jardin';
 import { FichaPlantaCard } from './FichaPlanta';
 import { ProductoCard } from './ProductoCard';
+import { DiagnosticoCard } from './DiagnosticoCard';
 
 type Fase = 'lista' | 'listaConFoto' | 'analizando' | 'resultado';
-type Modo = 'planta' | 'producto';
+type Modo = 'planta' | 'producto' | 'plaga';
 
 export function IdentificarView({
   onGuardar,
@@ -33,6 +34,8 @@ export function IdentificarView({
   plantas,
   onGuardarProducto,
   onAplicarProducto,
+  onAbrirEnciclopedia,
+  modoInicial,
 }: {
   onGuardar: (p: PlantaGuardada) => void;
   onToast: (tipo: 'exito' | 'error' | 'info', texto: string) => void;
@@ -46,13 +49,18 @@ export function IdentificarView({
   onGuardarProducto: (p: ProductoGuardado) => void;
   /** v1.3: registra la aplicación de un producto a una planta. */
   onAplicarProducto: (plantaId: string, producto: ProductoGuardado) => void;
+  /** v1.4: abrir la enciclopedia de plagas (Academia). */
+  onAbrirEnciclopedia?: () => void;
+  /** v1.4: modo de arranque (ej: 'plaga' al venir desde la enciclopedia). */
+  modoInicial?: Modo;
 }) {
   const [fase, setFase] = useState<Fase>('lista');
-  const [modo, setModo] = useState<Modo>('planta');
+  const [modo, setModo] = useState<Modo>(modoInicial || 'planta');
   const [foto, setFoto] = useState<FotoPlanta | null>(null);
   const [ficha, setFicha] = useState<FichaPlanta | null>(null);
   const [producto, setProducto] = useState<AnalisisProducto | null>(null);
   const [productoGuardado, setProductoGuardado] = useState<ProductoGuardado | null>(null);
+  const [diagnostico, setDiagnostico] = useState<DiagnosticoPlaga | null>(null);
   const [modoDemo, setModoDemo] = useState(false);
   const [error, setError] = useState('');
 
@@ -71,6 +79,7 @@ export function IdentificarView({
     setFicha(null);
     setProducto(null);
     setProductoGuardado(null);
+    setDiagnostico(null);
     setError('');
     setVerificacion(null);
     setNombreLocal('');
@@ -99,6 +108,27 @@ export function IdentificarView({
         return;
       }
       setProducto(parsearProducto(r.texto));
+      setModoDemo(!!r.modoDemo);
+      setFase('resultado');
+      return;
+    }
+
+    // ── v1.4: flujo plaga (diagnóstico) ──
+    if (modo === 'plaga') {
+      const contextoJardin = plantas.length > 0
+        ? plantas.map(p => `${p.apodo || p.ficha.nombreComun} (${p.ficha.nombreCientifico})`).join('; ')
+        : '';
+      const r = await diagnosticarPlaga(
+        foto.base64, foto.mediaType, contextoJardin,
+        pais ? `El usuario vive en ${pais}.` : '',
+      );
+      if (!r.ok) {
+        setError(r.error || 'No se pudo diagnosticar.');
+        setFase('listaConFoto');
+        onToast('error', r.error || 'No se pudo diagnosticar.');
+        return;
+      }
+      setDiagnostico(parsearDiagnostico(r.texto));
       setModoDemo(!!r.modoDemo);
       setFase('resultado');
       return;
@@ -191,6 +221,7 @@ export function IdentificarView({
     setFicha(null);
     setProducto(null);
     setProductoGuardado(null);
+    setDiagnostico(null);
     setVerificacion(null);
     setNombreLocal('');
     setMostrarRegional(false);
@@ -219,14 +250,14 @@ export function IdentificarView({
         </div>
       )}
 
-      {/* ── v1.3: toggle Planta / Producto ── */}
+      {/* ── v1.3/v1.4: toggle Planta / Producto / Plaga ── */}
       {fase === 'lista' && (
-        <div className="grid grid-cols-2 gap-1.5 p-1.5 rounded-2xl bg-slate-900 border border-slate-800">
-          {([['planta', '🌿', 'Planta'], ['producto', '🧪', 'Producto']] as const).map(([m, emoji, texto]) => (
+        <div className="grid grid-cols-3 gap-1.5 p-1.5 rounded-2xl bg-slate-900 border border-slate-800">
+          {([['planta', '🌿', 'Planta'], ['producto', '🧪', 'Producto'], ['plaga', '🦠', 'Plaga']] as const).map(([m, emoji, texto]) => (
             <button
               key={m}
               onClick={() => setModo(m)}
-              className={`py-2.5 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 ${
+              className={`py-2.5 rounded-xl text-xs font-black transition flex items-center justify-center gap-1 ${
                 modo === m
                   ? 'bg-gradient-to-r from-emerald-400 to-emerald-600 text-white shadow-lg shadow-emerald-900/40'
                   : 'text-slate-400 active:scale-[0.97]'
@@ -275,7 +306,7 @@ export function IdentificarView({
                   </div>
                 </div>
               </>
-            ) : (
+            ) : modo === 'producto' ? (
               <>
                 <button
                   onClick={() => elegirFoto(true)}
@@ -308,6 +339,39 @@ export function IdentificarView({
                   </div>
                 </div>
               </>
+            ) : (
+              <>
+                <button
+                  onClick={() => elegirFoto(true)}
+                  className="w-full rounded-3xl border-2 border-dashed border-rose-700/60 bg-rose-950/20 p-8 flex flex-col items-center gap-4 active:scale-[0.98] transition"
+                >
+                  <span className="w-20 h-20 rounded-3xl bg-gradient-to-br from-rose-400 to-rose-700 flex items-center justify-center shadow-xl shadow-rose-900/40">
+                    <Stethoscope className="w-10 h-10 text-white" />
+                  </span>
+                  <div>
+                    <p className="text-base font-black text-center">Tomar foto de la planta enferma</p>
+                    <p className="text-xs text-slate-400 text-center mt-1">La hoja o zona rara con buena luz — hasta el más mínimo detalle 🔍</p>
+                  </div>
+                </button>
+                <button
+                  onClick={() => elegirFoto(false)}
+                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-slate-900 border border-slate-800 text-sm font-bold text-slate-200 active:scale-[0.98] transition"
+                >
+                  <ImagePlus className="w-5 h-5 text-rose-400" />
+                  Subir desde la galería
+                </button>
+
+                {/* Tarjeta explicativa del diagnóstico */}
+                <div className="rounded-2xl p-4 bg-rose-950/30 border border-rose-900/40 flex gap-3">
+                  <Bug className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-black text-rose-300">¿Manchas, bichos o algo raro?</p>
+                    <p className="text-[11px] text-slate-400 leading-relaxed mt-1">
+                      La IA fitopatóloga mira la foto, diagnostica <b className="text-slate-300">qué tiene tu planta</b>, su gravedad y te arma el plan paso a paso: qué cortar, qué aplicar y cómo evitar que se propague al resto del jardín.
+                    </p>
+                  </div>
+                </div>
+              </>
             )}
           </motion.div>
         )}
@@ -316,7 +380,7 @@ export function IdentificarView({
         {fase === 'listaConFoto' && foto && (
           <motion.div key="conFoto" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
             <div className="rounded-3xl overflow-hidden border border-slate-700 bg-slate-900">
-              <img src={foto.dataUrl} alt={modo === 'producto' ? 'Foto del producto a analizar' : 'Foto de la planta a analizar'} className="w-full max-h-[420px] object-contain" />
+              <img src={foto.dataUrl} alt={modo === 'producto' ? 'Foto del producto a analizar' : modo === 'plaga' ? 'Foto de la planta enferma' : 'Foto de la planta a analizar'} className="w-full max-h-[420px] object-contain" />
             </div>
             {error && (
               <div className="rounded-2xl p-3.5 bg-red-950/40 border border-red-900/50 flex items-start gap-2.5">
@@ -329,11 +393,13 @@ export function IdentificarView({
               className={`w-full flex items-center justify-center gap-2.5 py-4 rounded-2xl text-white font-black text-sm shadow-lg active:scale-[0.98] transition ${
                 modo === 'producto'
                   ? 'bg-gradient-to-r from-sky-400 to-sky-600 shadow-sky-900/40'
-                  : 'bg-gradient-to-r from-emerald-400 to-emerald-600 shadow-emerald-900/40'
+                  : modo === 'plaga'
+                    ? 'bg-gradient-to-r from-rose-400 to-rose-600 shadow-rose-900/40'
+                    : 'bg-gradient-to-r from-emerald-400 to-emerald-600 shadow-emerald-900/40'
               }`}
             >
               <ScanSearch className="w-5 h-5" />
-              {modo === 'producto' ? 'Pedir consejo a la IA' : 'Analizar con IA'}
+              {modo === 'producto' ? 'Pedir consejo a la IA' : modo === 'plaga' ? 'Diagnosticar con la IA' : 'Analizar con IA'}
             </button>
             <button
               onClick={reiniciar}
@@ -352,16 +418,20 @@ export function IdentificarView({
               <div className="absolute inset-0 flex items-center justify-center">
                 {modo === 'producto'
                   ? <FlaskConical className="w-16 h-16 text-sky-400 animar-respirar drop-shadow-[0_0_12px_rgba(56,189,248,0.5)]" />
-                  : <Sprout className="w-16 h-16 text-emerald-400 animar-respirar drop-shadow-[0_0_12px_rgba(52,211,153,0.5)]" />}
+                  : modo === 'plaga'
+                    ? <Stethoscope className="w-16 h-16 text-rose-400 animar-respirar drop-shadow-[0_0_12px_rgba(251,113,133,0.5)]" />
+                    : <Sprout className="w-16 h-16 text-emerald-400 animar-respirar drop-shadow-[0_0_12px_rgba(52,211,153,0.5)]" />}
               </div>
             </div>
             <div>
               <p className="text-base font-black">
-                {modo === 'producto' ? 'La IA está leyendo la etiqueta…' : 'La IA está analizando tu planta…'}
+                {modo === 'producto' ? 'La IA está leyendo la etiqueta…' : modo === 'plaga' ? 'La IA está examinando a tu paciente…' : 'La IA está analizando tu planta…'}
               </p>
               <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
                 {modo === 'producto' ? (
                   <>Ingredientes, dosis para tus plantas y recomendación de jardinero 🧪<br />Puede tomar unos segundos.</>
+                ) : modo === 'plaga' ? (
+                  <>Síntomas, gravedad, plan de tratamiento y prevención 🩺<br />Puede tomar unos segundos.</>
                 ) : (
                   <>Reconociendo especie, cuidados, plagas y nombres regionales 🌎<br />Puede tomar unos segundos.</>
                 )}
@@ -371,7 +441,9 @@ export function IdentificarView({
               <motion.div
                 className={`h-full ${modo === 'producto'
                   ? 'bg-gradient-to-r from-sky-400 to-sky-600'
-                  : 'bg-gradient-to-r from-emerald-400 to-emerald-600'}`}
+                  : modo === 'plaga'
+                    ? 'bg-gradient-to-r from-rose-400 to-rose-600'
+                    : 'bg-gradient-to-r from-emerald-400 to-emerald-600'}`}
                 initial={{ x: '-100%' }}
                 animate={{ x: '100%' }}
                 transition={{ repeat: Infinity, duration: 1.2, ease: 'easeInOut' }}
@@ -384,7 +456,45 @@ export function IdentificarView({
         {/* ── Fase: resultado ── */}
         {fase === 'resultado' && foto && (
           <motion.div key="resultado" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-            {modo === 'producto' && producto ? (
+            {modo === 'plaga' && diagnostico ? (
+              diagnostico.esPlanta ? (
+                <>
+                  <DiagnosticoCard
+                    diagnostico={diagnostico}
+                    modoDemo={modoDemo}
+                    onAbrirEnciclopedia={onAbrirEnciclopedia}
+                  />
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={reiniciar}
+                      className="flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-gradient-to-r from-rose-400 to-rose-600 text-white font-black text-sm shadow-lg shadow-rose-900/40 active:scale-[0.97] transition"
+                    >
+                      <Camera className="w-5 h-5" /> Otra foto
+                    </button>
+                    <button
+                      onClick={reiniciar}
+                      className="flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-slate-900 border border-slate-700 text-sm font-bold active:scale-[0.97] transition"
+                    >
+                      <RefreshCcw className="w-5 h-5 text-rose-400" /> Listo
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="rounded-3xl p-6 bg-slate-900 border border-slate-800 text-center">
+                  <span className="inline-flex w-16 h-16 rounded-2xl bg-amber-950/50 items-center justify-center mb-3">
+                    <TriangleAlert className="w-8 h-8 text-amber-400" />
+                  </span>
+                  <p className="text-base font-black">Eso no parece una planta 🤔</p>
+                  <p className="text-sm text-slate-400 mt-2 leading-relaxed">{diagnostico.descripcionNoPlanta || diagnostico.explicacion || 'Acerca la cámara a la hoja o zona afectada y prueba de nuevo.'}</p>
+                  <button
+                    onClick={reiniciar}
+                    className="mt-5 w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-gradient-to-r from-rose-400 to-rose-600 text-white font-black text-sm active:scale-[0.98] transition"
+                  >
+                    <Camera className="w-5 h-5" /> Probar otra foto
+                  </button>
+                </div>
+              )
+            ) : modo === 'producto' && producto ? (
               producto.esProducto ? (
                 <>
                   <ProductoCard

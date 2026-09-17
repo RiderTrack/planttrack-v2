@@ -24,6 +24,9 @@ import type { CuentaUsuario } from './services/cuenta';
 import { observarSesion } from './services/cuenta';
 import { iniciarSincronizacion, detenerSincronizacion, observarSync } from './services/sync';
 import { reprogramarNotificaciones } from './services/notificaciones';
+import { actualizarWidget } from './services/widget';
+
+type PestañaAcademia = 'lecciones' | 'glosario' | 'plagas' | 'siembra';
 
 export default function App() {
   const [tab, setTab] = useState<NavigationTab>('inicio');
@@ -37,6 +40,9 @@ export default function App() {
   const refrescarIA = useCallback(() => setIaConectada(hayToken()), []);
   const jardin = useJardin();
   const [mostrarAcademia, setMostrarAcademia] = useState(false);
+  // 🦟 v1.4: pestaña de la academia y modo de la cámara al navegar entre features
+  const [pestannaAcademia, setPestannaAcademia] = useState<PestañaAcademia>('lecciones');
+  const [modoIdentificar, setModoIdentificar] = useState<'planta' | 'producto' | 'plaga'>('planta');
 
   // 🧪 v1.3: Mi Botiquín — estado a nivel raíz para que Identificar
   // (guarda) y Jardín (lista/aplica) vean lo mismo sin recargar.
@@ -56,6 +62,8 @@ export default function App() {
   // 🔔 v1.2: notificaciones locales — reprogramar cuando el jardín cambia
   useEffect(() => {
     void reprogramarNotificaciones(jardin.plantas);
+    // 📱 v1.4: refrescar también el widget del escritorio
+    actualizarWidget(jardin.plantas);
   }, [jardin.plantas]);
   // ☁️ Sesión de nube (opcional): el observer vive a nivel raíz para
   // que el sync corra en background sin importar la pestaña activa.
@@ -125,10 +133,10 @@ export default function App() {
             transition={{ duration: 0.18 }}
           >
             {tab === 'inicio' && (
-              <DashboardView plantas={jardin.plantas} onIdentificar={irAIdentificar} onAbrirJardin={() => setTab('jardin')} onAbrirAcademia={() => setMostrarAcademia(true)} />
+              <DashboardView plantas={jardin.plantas} onIdentificar={irAIdentificar} onAbrirJardin={() => setTab('jardin')} onAbrirAcademia={() => setMostrarAcademia(true)} onToast={lanzarToast} />
             )}
             {tab === 'identificar' && (
-              <IdentificarView onGuardar={jardin.agregar} onToast={lanzarToast} demo={!iaConectada} onIrAjustes={() => setTab('ajustes')} plantas={jardin.plantas} onGuardarProducto={guardarEnBotiquin} onAplicarProducto={aplicarAPlanta} />
+              <IdentificarView onGuardar={jardin.agregar} onToast={lanzarToast} demo={!iaConectada} onIrAjustes={() => setTab('ajustes')} plantas={jardin.plantas} onGuardarProducto={guardarEnBotiquin} onAplicarProducto={aplicarAPlanta} modoInicial={modoIdentificar} onAbrirEnciclopedia={() => { setPestannaAcademia('plagas'); setMostrarAcademia(true); }} />
             )}
             {tab === 'jardin' && (
               <JardinView jardin={jardin} onToast={lanzarToast} botiquin={botiquin} onEliminarProducto={quitarDeBotiquin} onAplicarProducto={aplicarAPlanta} />
@@ -149,7 +157,12 @@ export default function App() {
       {/* 🎓 Academia PlantTrack (overlay desde Dashboard) */}
       <AnimatePresence>
         {mostrarAcademia && (
-          <AcademiaView onCerrar={() => setMostrarAcademia(false)} onToast={lanzarToast} />
+          <AcademiaView
+            onCerrar={() => setMostrarAcademia(false)}
+            onToast={lanzarToast}
+            pestannaInicial={pestannaAcademia}
+            onDiagnosticar={() => { setModoIdentificar('plaga'); setTab('identificar'); }}
+          />
         )}
       </AnimatePresence>
     </div>

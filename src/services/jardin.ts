@@ -18,6 +18,8 @@ import type {
 import { registrarRiegoCompletado, registrarActividad } from './logros';
 import { reprogramarNotificaciones } from './notificaciones';
 import { exportarBotiquin, importarBotiquin } from './productos';
+import { listarEsquejes, importarEsquejes } from './esquejes';
+import { leerVacaciones } from './vacaciones';
 
 const LS_JARDIN = 'planttrack.jardin';
 const LS_NOTAS = 'planttrack.notas'; // id -> notas libres
@@ -291,13 +293,15 @@ export function leerNotas(id: string): string {
   } catch { return ''; }
 }
 
-/** Exporta todo el jardín + botiquín para respaldo (Ajustes). */
+/** Exporta todo el jardín + botiquín + esquejes para respaldo (Ajustes). */
 export function exportarJardin(): string {
   return JSON.stringify({
-    version: 3,
+    version: 4,
     fecha: new Date().toISOString(),
     plantas: leerTodo(),
     productos: exportarBotiquin(),
+    esquejes: listarEsquejes(),
+    vacaciones: leerVacaciones(),
     notas: JSON.parse(localStorage.getItem(LS_NOTAS) || '{}'),
     progreso: localStorage.getItem('planttrack.progreso') || null,
   }, null, 2);
@@ -322,7 +326,13 @@ export function importarJardin(json: string): { ok: boolean; mensaje: string } {
       try { localStorage.setItem('planttrack.progreso', data.progreso); } catch { /* ok */ }
     }
     const productosNuevos = Array.isArray(data?.productos) ? importarBotiquin(data.productos) : 0;
-    const msg = `Importadas ${nuevas.length} plantas nuevas.` + (productosNuevos > 0 ? ` Botiquín: +${productosNuevos} productos.` : '');
+    const esquejesNuevos = Array.isArray(data?.esquejes) ? importarEsquejes(data.esquejes) : 0;
+    if (data?.vacaciones?.activa) {
+      try { localStorage.setItem('planttrack.vacaciones', JSON.stringify(data.vacaciones)); } catch { /* ok */ }
+    }
+    const msg = `Importadas ${nuevas.length} plantas nuevas.`
+      + (productosNuevos > 0 ? ` Botiquín: +${productosNuevos} productos.` : '')
+      + (esquejesNuevos > 0 ? ` Esquejes: +${esquejesNuevos}.` : '');
     return { ok: true, mensaje: msg };
   } catch {
     return { ok: false, mensaje: 'JSON inválido — no se pudo importar.' };

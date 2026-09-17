@@ -16,6 +16,15 @@
 //  • Foto del envase → la IA lee etiqueta e ingredientes
 //  • Veredicto, dosis y frecuencia personalizadas
 //  • Mi Botiquín + aplicaciones registradas por planta
+//
+// v1.4 — MEGA-UPDATE "JARDÍN PRO":
+//  • Enciclopedia de plagas y enfermedades (offline)
+//  • Diagnóstico IA de plagas por foto (3er modo de cámara)
+//  • Calendario de siembra + fases lunares
+//  • Clima inteligente (Open-Meteo) que ajusta el riego
+//  • Exportar ficha como imagen compartible
+//  • Modo vacaciones + guía del cuidador
+//  • Intercambio de esquejes + widget de Android
 // ═══════════════════════════════════════════════════════════
 
 /** Pestañas de navegación principal (BottomNav). */
@@ -249,4 +258,116 @@ export interface AplicacionProducto {
   productoNombre: string;
   fecha: string; // ISO
   nota?: string;
+}
+
+/** ── v1.4: Enciclopedia de plagas y enfermedades ── */
+
+export interface PlagaEnciclopedia {
+  id: string;
+  nombre: string;
+  emoji: string;
+  tipo: 'plaga' | 'enfermedad';
+  /** 1 = molesta · 2 = seria · 3 = grave (puede matar) */
+  gravedad: 1 | 2 | 3;
+  /** Qué se observa en la planta. */
+  sintomas: string[];
+  /** Condiciones que la favorecen. */
+  condiciones: string;
+  /** Tratamiento con productos. */
+  tratamiento: string;
+  /** Tratamiento casero/orgánico. */
+  tratamientoCasero: string;
+  prevencion: string[];
+  /** Dónde suele aparecer. */
+  plantasFrecuentes: string;
+}
+
+/** Diagnóstico que devuelve la IA al ver la foto de una planta enferma. */
+export interface DiagnosticoPlaga {
+  esPlanta: boolean;
+  problemaDetectado: boolean;
+  plagaProbable: string;
+  confianza: number; // 0-100
+  sintomasDetectados: string[];
+  gravedad: 'leve' | 'moderada' | 'grave';
+  /** Plantas del jardín del usuario que podrían contagiarse. */
+  afectaA: string[];
+  /** Pasos inmediatos, en orden. */
+  plan: string[];
+  /** Qué tipo de producto usar (sin marcas). */
+  productoSugerido: string;
+  alternativaCasera: string;
+  prevencion: string;
+  /** Modo maestro: el porqué de la situación. */
+  explicacion: string;
+  /** Si la foto no muestra una planta: qué se ve. */
+  descripcionNoPlanta?: string;
+}
+
+/** ── v1.4: Calendario de siembra ── */
+
+export interface CultivoSiembra {
+  id: string;
+  nombre: string;
+  emoji: string;
+  familia: string;
+  /** Meses 1-12 en que se siembra en el hemisferio SUR. */
+  siembraSur: number[];
+  /** Meses 1-12 en que se siembra en el hemisferio NORTE. */
+  siembraNorte: number[];
+  profundidad: string;
+  /** Distancia entre plantas. */
+  marco: string;
+  diasCosecha: string;
+  /** Mejor fase lunar para sembrarlo (tradición popular). */
+  lunar: 'creciente' | 'menguante' | 'indiferente';
+  tips: string[];
+  nivel: 'facil' | 'medio' | 'avanzado';
+}
+
+export interface FaseLunar {
+  nombre: string;
+  emoji: string;
+  /** 0-1 fracción iluminada. */
+  iluminacion: number;
+  /** Consejo de siembra tradicional. */
+  consejo: string;
+}
+
+/** ── v1.4: Esquejes (intercambio) ── */
+
+export type EstadoEsqueje = 'enraizando' | 'enraizado' | 'plantado' | 'regalado' | 'fallido';
+export type MedioEsqueje = 'agua' | 'tierra' | 'perlita' | 'aire';
+
+export interface Esqueje {
+  id: string;
+  nombre: string;
+  /** Planta del jardín de la que salió (opcional). */
+  plantaId?: string;
+  especie: string;
+  medio: MedioEsqueje;
+  fechaInicio: string; // ISO
+  estado: EstadoEsqueje;
+  fechaEstado: string; // ISO del último cambio de estado
+  nota?: string;
+}
+
+/** ── v1.4: Clima (Open-Meteo) ── */
+
+export interface InfoClima {
+  ok: boolean;
+  tempMax: number;
+  tempMin: number;
+  lluviaHoy: number; // mm
+  lluviaManana: number; // mm
+  codigo: number; // WMO weather code
+  fechaConsulta: string; // ISO
+}
+
+/** ── v1.4: Modo vacaciones ── */
+
+export interface ConfigVacaciones {
+  activa: boolean;
+  /** Nombre de quien cuida las plantas (opcional). */
+  cuidador: string;
 }

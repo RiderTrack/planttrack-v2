@@ -6,7 +6,7 @@
 // ═══════════════════════════════════════════════════════════
 
 import { useCallback, useEffect, useState } from 'react';
-import type { PlantaGuardada, ProductoGuardado, Recordatorio, TipoRecordatorio, VerificacionRegional } from '../types';
+import type { PlantaGuardada, ProductoGuardado, Recordatorio, TipoRecordatorio, VerificacionRegional, Esqueje, EstadoEsqueje, MedioEsqueje } from '../types';
 import {
   listarPlantas, guardarPlanta, eliminarPlanta,
   registrarRiego, ajustarFrecuencia,
@@ -18,13 +18,16 @@ import {
   agregarRecordatorio, completarRecordatorio, eliminarRecordatorio,
   aplicarProductoAPlanta,
 } from '../services/jardin';
+import { listarEsquejes, crearEsqueje, avanzarEsqueje, eliminarEsqueje } from '../services/esquejes';
 
 export function useJardin() {
   const [plantas, setPlantas] = useState<PlantaGuardada[]>([]);
+  const [esquejes, setEsquejes] = useState<Esqueje[]>([]);
   const [cargando, setCargando] = useState(true);
 
   const refrescar = useCallback(() => {
     setPlantas(listarPlantas());
+    setEsquejes(listarEsquejes());
     setCargando(false);
   }, []);
 
@@ -108,12 +111,30 @@ export function useJardin() {
     refrescar();
   }, [refrescar]);
 
+  // ── v1.4: esquejes ──
+  const nuevoEsqueje = useCallback((datos: { nombre: string; especie: string; plantaId?: string; medio: MedioEsqueje; nota?: string }) => {
+    crearEsqueje(datos);
+    refrescar();
+  }, [refrescar]);
+
+  const avanzarEstadoEsqueje = useCallback((id: string, estado: EstadoEsqueje) => {
+    avanzarEsqueje(id, estado);
+    refrescar();
+  }, [refrescar]);
+
+  const quitarEsqueje = useCallback((id: string) => {
+    eliminarEsqueje(id);
+    refrescar();
+  }, [refrescar]);
+
   return {
-    plantas, cargando, refrescar, agregar, quitar, regar, ajustar,
+    plantas, esquejes, cargando, refrescar, agregar, quitar, regar, ajustar,
     // v1.2
     editar, aplicarRegional, conFoto, sinFoto, etiqueta, medir,
     nuevoRecordatorio, hacerRecordatorio, borrarRecordatorio,
     // v1.3
     aplicarProducto,
+    // v1.4
+    nuevoEsqueje, avanzarEstadoEsqueje, quitarEsqueje,
   };
 }

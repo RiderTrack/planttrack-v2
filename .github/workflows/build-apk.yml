@@ -103,12 +103,39 @@ jobs:
             echo "⚠️ android-icons/ NO existe — el APK saldrá con el ícono default de Capacitor"
           fi
 
+      # 📱 WIDGET 2x2: plantas + próximo riego en el escritorio.
+      # El código nativo vive en android-widget/ (mismo patrón que
+      # android-icons/): se copia ENCIMA del proyecto generado por
+      # cap add android, y el receiver se inyecta en el manifest
+      # con un one-liner de python (nada de heredocs multi-línea).
+      - name: Install home screen widget (PlantTrack)
+        run: |
+            if [ -d android-widget ]; then
+              # Java nativo (mismo paquete que la app: com.planttrack.v2)
+              cp android-widget/WidgetPlantTrack.java android-widget/WidgetBridge.java android/app/src/main/java/com/planttrack/v2/
+              # MainActivity custom: registra el plugin ANTES de que el
+              # bridge se construya (Capacitor 6 lo arma en onCreate)
+              cp android-widget/MainActivity.java android/app/src/main/java/com/planttrack/v2/MainActivity.java
+              # Recursos: layout + fondo redondeado + config del widget
+              mkdir -p android/app/src/main/res/xml
+              cp android-widget/res/layout/widget_planttrack.xml android/app/src/main/res/layout/
+              cp android-widget/res/drawable/widget_bg.xml android/app/src/main/res/drawable/
+              cp android-widget/res/xml/widget_info_planttrack.xml android/app/src/main/res/xml/
+              # Registrar el receiver en el AndroidManifest (one-liner)
+              python3 -c "m=open('android/app/src/main/AndroidManifest.xml').read(); r=open('android-widget/receiver.xml').read(); open('android/app/src/main/AndroidManifest.xml','w').write(m.replace('</application>', r + '\n    </application>'))"
+              # Keep rule defensivo (por si R8 se activa algún día)
+              echo "-keep class com.planttrack.v2.** { *; }" >> android/app/proguard-rules.pro
+              echo "✅ Widget instalado (receiver + layout + plugin bridge)"
+            else
+              echo "⚠️ android-widget/ no existe — APK sin widget"
+            fi
+
       - name: Configure app strings
         run: |
           mkdir -p android/app/src/main/res/values
-          echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">PlantTrack V2</string><string name="title_activity_main">PlantTrack V2</string><string name="package_name">com.planttrack.v2</string><string name="custom_url_scheme">com.planttrack.v2</string></resources>' > android/app/src/main/res/values/strings.xml
-          # Versión visible del APK (versionCode 9 / versionName 1.3.0)
-          sed -i 's/versionCode 1$/versionCode 9/; s/versionName "1.0"/versionName "1.3.0"/' android/app/build.gradle
+          echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">PlantTrack V2</string><string name="title_activity_main">PlantTrack V2</string><string name="package_name">com.planttrack.v2</string><string name="custom_url_scheme">com.planttrack.v2</string><string name="widget_desc">Tus plantas y el próximo riego en el escritorio</string></resources>' > android/app/src/main/res/values/strings.xml
+          # Versión visible del APK (versionCode 10 / versionName 1.4.0)
+          sed -i 's/versionCode 1$/versionCode 10/; s/versionName "1.0"/versionName "1.4.0"/' android/app/build.gradle
 
       # ☁️ FIREBASE (Google Auth + Firestore) — todo condicional:
       # si no hay google-services.json (ni secret ni repo), la app sale

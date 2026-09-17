@@ -5,7 +5,7 @@
 // ═══════════════════════════════════════════════════════════
 
 import { useEffect, useRef, useState } from 'react';
-import { Sparkles, Moon, Sun, MonitorSmartphone, Download, Upload, Info, Check, Loader2, CloudOff, Cloud, LogOut, KeyRound, ChevronDown, Globe2, Bell, BellOff } from 'lucide-react';
+import { Sparkles, Moon, Sun, MonitorSmartphone, Download, Upload, Info, Check, Loader2, CloudOff, Cloud, LogOut, KeyRound, ChevronDown, Globe2, Bell, BellOff, Plane, Smartphone } from 'lucide-react';
 import { useTema, type ModoTema } from '../theme/useTema';
 import {
   MODELOS_CLAUDE, leerConfigIA, guardarConfigIA, probarConexion,
@@ -17,6 +17,7 @@ import { estadoSync, observarSync, type EstadoSync } from '../services/sync';
 import {
   leerConfigNotif, guardarConfigNotif, notificacionesDisponibles, reprogramarNotificaciones,
 } from '../services/notificaciones';
+import { leerVacaciones, guardarVacaciones } from '../services/vacaciones';
 
 export function AjustesView({
   onToast,
@@ -170,6 +171,14 @@ export function AjustesView({
     setNotifCfg(nueva);
     guardarConfigNotif(nueva);
     void reprogramarNotificaciones(listarPlantas());
+  };
+
+  // ── v1.4: modo vacaciones ──
+  const [vacCfg, setVacCfg] = useState(leerVacaciones());
+  const actualizarVacaciones = (cambios: Partial<typeof vacCfg>) => {
+    const nueva = { ...vacCfg, ...cambios };
+    setVacCfg(nueva);
+    guardarVacaciones(nueva);
   };
 
   const OPCIONES_TEMA: { id: ModoTema; icono: typeof Moon; texto: string }[] = [
@@ -364,6 +373,60 @@ export function AjustesView({
         )}
       </section>
 
+      {/* ── 🧳 v1.4: Modo vacaciones ── */}
+      <section className="rounded-3xl bg-slate-900 border border-slate-800 p-4 space-y-3">
+        <h3 className="text-sm font-black flex items-center gap-2">
+          <Plane className="w-4 h-4 text-orange-400" /> Modo vacaciones
+          <span className="ml-auto text-[10px] font-bold text-slate-500">alguien cuida tus plantas</span>
+        </h3>
+        <div className="flex items-center justify-between rounded-2xl bg-slate-800/50 p-3">
+          <div className="flex items-center gap-2.5">
+            <Plane className={`w-5 h-5 ${vacCfg.activa ? 'text-orange-400' : 'text-slate-500'}`} />
+            <div>
+              <p className="text-sm font-bold">{vacCfg.activa ? 'De viaje ✈️' : 'En casa 🏠'}</p>
+              <p className="text-[10px] text-slate-500">activa la guía del cuidador</p>
+            </div>
+          </div>
+          <button
+            onClick={() => actualizarVacaciones({ activa: !vacCfg.activa })}
+            role="switch"
+            aria-checked={vacCfg.activa}
+            aria-label="Activar modo vacaciones"
+            className={`w-12 h-7 rounded-full transition relative ${vacCfg.activa ? 'bg-orange-500' : 'bg-slate-600'}`}
+          >
+            <span className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-all ${vacCfg.activa ? 'left-6' : 'left-1'}`} />
+          </button>
+        </div>
+        {vacCfg.activa && (
+          <>
+            <div>
+              <label htmlFor="cuidador" className="text-[11px] font-black text-slate-400 uppercase tracking-wide mb-1.5 block">¿Quién cuida tus plantas?</label>
+              <input
+                id="cuidador"
+                value={vacCfg.cuidador}
+                onChange={e => actualizarVacaciones({ cuidador: e.target.value })}
+                placeholder="Ej: Mamá, el vecino del 402…"
+                className="w-full px-3.5 py-3 rounded-2xl bg-slate-800/60 border border-slate-700 text-sm placeholder:text-slate-600 focus:outline-none focus:border-orange-600/60"
+              />
+            </div>
+            <p className="text-[11px] text-slate-500 leading-relaxed">
+              En el Inicio verás el botón para <b className="text-slate-300">mandar la guía del cuidador</b>: las instrucciones de riego de cada planta listas para WhatsApp, con las 3 reglas de oro para que no ahoguen nada 🌱
+            </p>
+          </>
+        )}
+      </section>
+
+      {/* ── 📱 v1.4: Widget de escritorio ── */}
+      <section className="rounded-3xl bg-slate-900 border border-slate-800 p-4 flex gap-3">
+        <Smartphone className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+        <div>
+          <p className="text-sm font-black text-slate-300">Widget PlantTrack 📱</p>
+          <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+            En tu Android: mantén presionado el escritorio → <b className="text-slate-300">Widgets</b> → busca PlantTrack. Tendrás tus plantas y el próximo riego siempre a la vista, y al tocarlo se abre la app.
+          </p>
+        </div>
+      </section>
+
       {/* ── Apariencia ── */}
       <section className="rounded-3xl bg-slate-900 border border-slate-800 p-4">
         <h3 className="text-sm font-black mb-3">Apariencia</h3>
@@ -475,9 +538,9 @@ export function AjustesView({
       <section className="rounded-3xl bg-slate-900 border border-slate-800 p-4 flex gap-3">
         <Info className="w-5 h-5 text-slate-500 shrink-0 mt-0.5" />
         <div className="text-xs text-slate-500 leading-relaxed space-y-1">
-          <p className="text-sm font-black text-slate-300">PlantTrack V2 · 1.3.0</p>
+          <p className="text-sm font-black text-slate-300">PlantTrack V2 · 1.4.0</p>
           <p>React 19 + Vite 6 + TypeScript + Tailwind 4 + Capacitor 6.</p>
-          <p>Identificación botánica, cuidados, abonos y plagas potenciados por Claude (Anthropic).</p>
+          <p>Identificación botánica, diagnóstico de plagas, productos y clima potenciados por Claude (Anthropic) + Open-Meteo.</p>
           <p>Hecho con 🌿 para riders de plantas — de la familia Track.</p>
         </div>
       </section>

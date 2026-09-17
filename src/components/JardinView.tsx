@@ -9,10 +9,10 @@ import { useMemo, useState } from 'react';
 import {
   Search, Flower2, X, Droplets, Minus, Plus, Trash2, Share2, StickyNote,
   Clock3, Tag, Camera, Pencil, Ruler, Bell, Heart, Globe2, Check, TrendingUp, ChevronRight,
-  FlaskConical, SprayCan,
+  FlaskConical, SprayCan, Sprout, ImageIcon,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import type { PlantaGuardada, TipoRecordatorio, ProductoGuardado } from '../types';
+import type { PlantaGuardada, TipoRecordatorio, ProductoGuardado, EstadoEsqueje, MedioEsqueje } from '../types';
 import type { useJardin } from '../hooks/useJardin';
 import { estadoRiego, textoRiego, formatoCorto } from '../utils/riego';
 import { FichaPlantaCard } from './FichaPlanta';
@@ -21,6 +21,8 @@ import { guardarNotas, leerNotas, etiquetasDelJardin, ETIQUETA_TIPO } from '../s
 import { esNativo } from '../services/plataforma';
 import { tomarFoto } from '../services/camara';
 import { consejoTemporada, diasContigo, estacionDeHoy } from '../data/temporada';
+import { ETIQUETA_MEDIO, ETIQUETA_ESTADO, diasEnraizando, textoIntercambio, especiesSugeridas } from '../services/esquejes';
+import { compartirFichaImagen } from '../utils/compartirFicha';
 
 type RetornoJardin = ReturnType<typeof useJardin>;
 
@@ -43,6 +45,7 @@ export function JardinView({
   const [etiquetaFiltro, setEtiquetaFiltro] = useState<string | null>(null);
   const [verBotiquin, setVerBotiquin] = useState(false);
   const [productoAbiertoId, setProductoAbiertoId] = useState<string | null>(null);
+  const [verEsquejes, setVerEsquejes] = useState(false);
 
   const etiquetas = useMemo(() => etiquetasDelJardin(), [jardin.plantas]);
 
@@ -204,6 +207,30 @@ export function JardinView({
         </AnimatePresence>
       </section>
 
+      {/* ── 🌱 v1.4: Mis Esquejes ── */}
+      <section className="rounded-3xl bg-slate-900 border border-slate-800 overflow-hidden">
+        <button
+          onClick={() => setVerEsquejes(v => !v)}
+          className="w-full flex items-center gap-2.5 p-4"
+        >
+          <Sprout className="w-5 h-5 text-lime-400" />
+          <span className="text-sm font-black">Mis Esquejes</span>
+          <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-lime-500/15 border border-lime-700/50 text-lime-300">
+            {jardin.esquejes.length}
+          </span>
+          <ChevronRight className={`w-4 h-4 text-slate-500 ml-auto transition-transform ${verEsquejes ? 'rotate-90' : ''}`} />
+        </button>
+        <AnimatePresence initial={false}>
+          {verEsquejes && (
+            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+              <div className="px-4 pb-4">
+                <PanelEsquejes jardin={jardin} onToast={onToast} />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </section>
+
       {/* ── Detalle en pantalla completa ── */}
       <AnimatePresence>
         {detalle && (
@@ -354,6 +381,22 @@ function DetallePlanta({
             <p className="text-xs text-slate-300 leading-relaxed">{consejo}</p>
           </div>
         )}
+
+        {/* ── v1.4: compartir texto / tarjeta imagen ── */}
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={() => compartirPlanta(planta, onToast)}
+            className="flex items-center justify-center gap-2 py-3 rounded-2xl bg-slate-900 border border-slate-700 text-xs font-black text-slate-200 active:scale-[0.97] transition"
+          >
+            <Share2 className="w-4 h-4 text-emerald-400" /> Compartir texto
+          </button>
+          <button
+            onClick={() => void compartirFichaImagen(planta, onToast)}
+            className="flex items-center justify-center gap-2 py-3 rounded-2xl bg-gradient-to-r from-emerald-400 to-emerald-600 text-white text-xs font-black shadow-lg shadow-emerald-900/40 active:scale-[0.97] transition"
+          >
+            <ImageIcon className="w-4 h-4" /> Tarjeta imagen
+          </button>
+        </div>
 
         {/* ── Editor de ficha (editable) ── */}
         <AnimatePresence>
@@ -938,6 +981,236 @@ function NotaPlanta({ id, onGuardar }: { id: string; onGuardar: () => void }) {
       aria-label="Notas de la planta"
       className="w-full p-3 rounded-2xl bg-slate-800/60 border border-slate-700 text-sm placeholder:text-slate-600 focus:outline-none focus:border-amber-600/60 resize-none"
     />
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
+// 🌱 v1.4: Panel de esquejes (propagación + intercambio)
+// ═══════════════════════════════════════════════════════════
+
+function PanelEsquejes({
+  jardin,
+  onToast,
+}: {
+  jardin: RetornoJardin;
+  onToast: (tipo: 'exito' | 'error' | 'info', texto: string) => void;
+}) {
+  const [agregando, setAgregando] = useState(false);
+  const [nombre, setNombre] = useState('');
+  const [especie, setEspecie] = useState('');
+  const [medio, setMedio] = useState<MedioEsqueje>('agua');
+  const [nota, setNota] = useState('');
+
+  const sugeridas = especiesSugeridas(jardin.plantas);
+  const textoCompartir = textoIntercambio(jardin.esquejes);
+
+  const crear = () => {
+    const esp = especie.trim() || nombre.trim();
+    if (!esp) {
+      onToast('error', 'Ponle nombre o especie a tu esqueje');
+      return;
+    }
+    // si la especie coincide con una planta del jardín, la vinculamos
+    const planta = jardin.plantas.find(p =>
+      (p.apodo || p.ficha.nombreComun).toLowerCase() === esp.toLowerCase()
+      || p.ficha.nombreCientifico?.toLowerCase() === esp.toLowerCase()
+    );
+    jardin.nuevoEsqueje({
+      nombre: nombre.trim() || esp,
+      especie: esp,
+      plantaId: planta?.id,
+      medio,
+      nota: nota.trim() || undefined,
+    });
+    onToast('exito', `🌱 Esqueje de ${esp} en ${ETIQUETA_MEDIO[medio].texto.toLowerCase()} — ¡suerte!`);
+    setNombre(''); setEspecie(''); setNota('');
+    setAgregando(false);
+  };
+
+  const compartirIntercambio = async () => {
+    if (!textoCompartir) return;
+    try {
+      if (esNativo()) {
+        const { Share } = await import('@capacitor/share');
+        await Share.share({ title: 'Intercambio de esquejes 🌱', text: textoCompartir, dialogTitle: 'Ofrecer esquejes' });
+      } else {
+        await navigator.clipboard.writeText(textoCompartir);
+        onToast('exito', '📋 Oferta copiada — pégala en tus grupos');
+      }
+    } catch {
+      onToast('info', 'No se pudo compartir');
+    }
+  };
+
+  const avanzar = (id: string, estado: EstadoEsqueje, msg: string) => {
+    jardin.avanzarEstadoEsqueje(id, estado);
+    onToast('exito', msg);
+  };
+
+  return (
+    <div className="space-y-3">
+      {/* Alta de esqueje */}
+      {!agregando ? (
+        <button
+          onClick={() => setAgregando(true)}
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-lime-500/10 border border-dashed border-lime-700/60 text-xs font-black text-lime-300 active:scale-[0.98] transition"
+        >
+          <Plus className="w-4 h-4" /> Corté un esqueje nuevo
+        </button>
+      ) : (
+        <div className="rounded-2xl bg-slate-800/50 border border-slate-700 p-3 space-y-2.5">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[10px] font-black text-slate-500 uppercase">Nombre (opcional)</label>
+              <input
+                value={nombre}
+                onChange={e => setNombre(e.target.value)}
+                placeholder="Ej: Poto de la abuela"
+                className="w-full mt-1 px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-sm placeholder:text-slate-600 focus:outline-none focus:border-lime-600/60"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-black text-slate-500 uppercase">Especie</label>
+              <input
+                value={especie}
+                onChange={e => setEspecie(e.target.value)}
+                placeholder="Ej: Potus"
+                className="w-full mt-1 px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-sm placeholder:text-slate-600 focus:outline-none focus:border-lime-600/60"
+              />
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {sugeridas.slice(0, 6).map(s => (
+              <button
+                key={s}
+                onClick={() => setEspecie(s)}
+                className={`text-[11px] font-bold px-2.5 py-1 rounded-xl border transition active:scale-95 ${
+                  especie === s ? 'bg-lime-500/15 border-lime-600/60 text-lime-300' : 'bg-slate-900 border-slate-700 text-slate-400'
+                }`}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+          <div>
+            <label className="text-[10px] font-black text-slate-500 uppercase">¿Dónde lo pusiste?</label>
+            <div className="grid grid-cols-4 gap-1.5 mt-1">
+              {(Object.keys(ETIQUETA_MEDIO) as MedioEsqueje[]).map(m => (
+                <button
+                  key={m}
+                  onClick={() => setMedio(m)}
+                  className={`py-2 rounded-xl border text-[10px] font-black transition active:scale-95 ${
+                    medio === m ? 'bg-sky-500/15 border-sky-600/60 text-sky-300' : 'bg-slate-900 border-slate-700 text-slate-400'
+                  }`}
+                >
+                  {ETIQUETA_MEDIO[m].emoji}<br />{ETIQUETA_MEDIO[m].texto}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-slate-500 mt-1.5 leading-relaxed">💡 {ETIQUETA_MEDIO[medio].tip}</p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setAgregando(false)}
+              className="px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-bold text-slate-400 active:scale-95 transition"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={crear}
+              className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-lime-400 to-lime-600 text-white text-xs font-black active:scale-[0.98] transition"
+            >
+              🌱 Empezar a enraizar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Lista de esquejes */}
+      {jardin.esquejes.length === 0 ? (
+        <p className="text-[11px] text-slate-500 leading-relaxed py-1">
+          Multiplica tus plantas: corta un tallo sano, ponlo en agua y sigue su historia aquí. Cuando enraíce, <b className="text-slate-300">plántalo o regálalo</b> — el intercambio de esquejes es la manera más linda de llenar la casa de plantas 🌱
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {jardin.esquejes.map(e => {
+            const est = ETIQUETA_ESTADO[e.estado];
+            const dias = diasEnraizando(e);
+            return (
+              <div key={e.id} className={`rounded-2xl p-3 border ${e.estado === 'fallido' ? 'bg-slate-900/60 border-slate-800 opacity-75' : 'bg-slate-800/40 border-slate-700/60'}`}>
+                <div className="flex items-center gap-2.5">
+                  <span className="w-9 h-9 rounded-xl bg-slate-900 border border-slate-700 flex items-center justify-center text-base shrink-0">
+                    {ETIQUETA_MEDIO[e.medio].emoji}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-black truncate">{e.nombre}</p>
+                    <p className="text-[10px] text-slate-500 truncate">
+                      {e.especie} · {ETIQUETA_MEDIO[e.medio].texto} · día {dias}
+                    </p>
+                  </div>
+                  <span className={`text-[9px] font-black px-2 py-1 rounded-full shrink-0 ${est.clase}`}>
+                    {est.emoji} {est.texto}
+                  </span>
+                </div>
+                {e.nota && <p className="text-[10px] text-slate-500 mt-1.5 truncate">📝 {e.nota}</p>}
+                {/* Acciones según estado */}
+                <div className="flex gap-1.5 mt-2.5">
+                  {e.estado === 'enraizando' && (
+                    <>
+                      <button
+                        onClick={() => avanzar(e.id, 'enraizado', '🎊 ¡Enraizó! El milagro funcionó (+15 XP)')}
+                        className="flex-1 py-2 rounded-xl bg-emerald-500/15 border border-emerald-700/60 text-[11px] font-black text-emerald-300 active:scale-95 transition"
+                      >
+                        ¡Ya tiene raíces!
+                      </button>
+                      <button
+                        onClick={() => avanzar(e.id, 'fallido', '😔 No pasó nada — pasa de nuevo cuando quieras')}
+                        className="px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-[11px] font-bold text-slate-500 active:scale-95 transition"
+                      >
+                        No logró
+                      </button>
+                    </>
+                  )}
+                  {e.estado === 'enraizado' && (
+                    <>
+                      <button
+                        onClick={() => avanzar(e.id, 'plantado', '🪴 ¡Plantado! Ahora es oficialmente una planta')}
+                        className="flex-1 py-2 rounded-xl bg-lime-500/15 border border-lime-700/60 text-[11px] font-black text-lime-300 active:scale-95 transition"
+                      >
+                        Plantar
+                      </button>
+                      <button
+                        onClick={() => avanzar(e.id, 'regalado', '🎁 Regalado — alguien más tiene un pedacito de tu jardín')}
+                        className="flex-1 py-2 rounded-xl bg-violet-500/15 border border-violet-700/60 text-[11px] font-black text-violet-300 active:scale-95 transition"
+                      >
+                        Regalar
+                      </button>
+                    </>
+                  )}
+                  <button
+                    onClick={() => { jardin.quitarEsqueje(e.id); onToast('info', '🌱 Esqueje eliminado'); }}
+                    aria-label="Eliminar esqueje"
+                    className="px-2.5 py-2 rounded-xl bg-slate-900 border border-slate-700 active:scale-95 transition shrink-0"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-slate-500" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Compartir oferta de intercambio */}
+          {textoCompartir && (
+            <button
+              onClick={compartirIntercambio}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-gradient-to-r from-lime-500/20 to-emerald-500/20 border border-lime-700/50 text-xs font-black text-lime-300 active:scale-[0.98] transition"
+            >
+              <Share2 className="w-4 h-4" /> Ofrecer mis esquejes al mundo
+            </button>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

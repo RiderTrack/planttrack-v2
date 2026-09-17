@@ -10,8 +10,9 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Camera, Droplets, Flower2, Bug, Lightbulb, ChevronRight, Leaf,
   CalendarClock, GraduationCap, Flame, Trophy, RefreshCcw, TrendingUp, Sparkles,
+  Plane, Share2, CloudSun, MapPin,
 } from 'lucide-react';
-import type { PlantaGuardada } from '../types';
+import type { InfoClima, PlantaGuardada } from '../types';
 import { pendientesDeRiego, estadoRiego, textoRiego, formatoCorto } from '../utils/riego';
 import { tipDelDia, ETIQUETA_CATEGORIA } from '../data/tips';
 import { TOTAL_LECCIONES } from '../data/lecciones';
@@ -19,6 +20,9 @@ import {
   leerProgreso, nivelActual, calcularRacha, evaluarLogros, greenScore,
 } from '../services/logros';
 import { leccionesCompletadas } from '../services/academia';
+import { obtenerClima, consejoDeRiego, describirCodigo, type ErrorClima } from '../services/clima';
+import { leerVacaciones, generarGuiaCuidador } from '../services/vacaciones';
+import { esNativo } from '../services/plataforma';
 
 function saludo(): string {
   const h = new Date().getHours();
@@ -33,15 +37,61 @@ export function DashboardView({
   onIdentificar,
   onAbrirJardin,
   onAbrirAcademia,
+  onToast,
 }: {
   plantas: PlantaGuardada[];
   onIdentificar: () => void;
   onAbrirJardin: () => void;
   onAbrirAcademia: () => void;
+  onToast: (tipo: 'exito' | 'error' | 'info', texto: string) => void;
 }) {
   // Tip del día con botón "dame otro"
   const [indiceTip, setIndiceTip] = useState(0);
   const tip = useMemo(() => tipDelDia(indiceTip), [indiceTip]);
+
+  // 🛰️ v1.4: clima inteligente
+  const [clima, setClima] = useState<InfoClima | null>(null);
+  const [errorClima, setErrorClima] = useState<ErrorClima>(null);
+  const [cargandoClima, setCargandoClima] = useState(true);
+  useEffect(() => {
+    let vivo = true;
+    void obtenerClima().then(r => {
+      if (!vivo) return;
+      setClima(r.clima);
+      setErrorClima(r.error);
+      setCargandoClima(false);
+    });
+    return () => { vivo = false; };
+  }, []);
+  const reintentarClima = async () => {
+    setCargandoClima(true);
+    const r = await obtenerClima(true);
+    setClima(r.clima);
+    setErrorClima(r.error);
+    setCargandoClima(false);
+    if (r.error === 'permiso') onToast('info', 'Activa la ubicación para el clima (permiso del navegador/sistema)');
+  };
+
+  // 🧳 v1.4: modo vacaciones
+  const vacaciones = useMemo(() => leerVacaciones(), []);
+
+  const compartirGuia = async () => {
+    const guia = generarGuiaCuidador(plantas);
+    try {
+      if (esNativo()) {
+        const { Share } = await import('@capacitor/share');
+        await Share.share({ title: 'Guía del cuidador 🌱', text: guia, dialogTitle: 'Mandar la guía' });
+      } else {
+        await navigator.clipboard.writeText(guia);
+        onToast('exito', '📋 Guía del cuidador copiada — pégala en WhatsApp');
+      }
+    } catch {
+      try {
+        await navigator.clipboard.writeText(guia);
+        onToast('exito', '📋 Guía copiada al portapapeles');
+      } catch { onToast('info', 'No se pudo compartir la guía'); }
+    }
+  };
 
   // Gamificación (se recalcula cuando cambia el jardín)
   const [tick, setTick] = useState(0);
@@ -133,6 +183,28 @@ export function DashboardView({
         </div>
       </section>
 
+      {/* ── 🧳 v1.4: banner modo vacaciones ── */}
+      {vacaciones.activa && (
+        <section className="rounded-2xl p-4 bg-gradient-to-r from-orange-950/60 to-slate-900 border border-orange-800/60 flex items-center gap-3">
+          <span className="w-10 h-10 rounded-2xl bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center shrink-0 shadow-lg shadow-orange-900/40">
+            <Plane className="w-5 h-5 text-white" />
+          </span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-black text-orange-200">Modo vacaciones activo</p>
+            <p className="text-[11px] text-slate-400 leading-snug mt-0.5">
+              {vacaciones.cuidador ? `${vacaciones.cuidador} está al mando` : 'Alguien cuida tus plantas'} — manda la guía con las instrucciones.
+            </p>
+          </div>
+          <button
+            onClick={compartirGuia}
+            aria-label="Compartir guía del cuidador"
+            className="w-10 h-10 rounded-2xl bg-orange-500/15 border border-orange-700/60 flex items-center justify-center shrink-0 active:scale-95 transition"
+          >
+            <Share2 className="w-5 h-5 text-orange-300" />
+          </button>
+        </section>
+      )}
+
       {/* Stats rápidas */}
       <section className="grid grid-cols-3 gap-3" aria-label="Resumen del jardín">
         {[
@@ -183,6 +255,59 @@ export function DashboardView({
         </div>
         <ChevronRight className="w-5 h-5 text-indigo-400 shrink-0" />
       </button>
+
+      {/* ── 🛰️ v1.4: clima inteligente ── */}
+      {cargandoClima ? (
+        <div className="rounded-2xl bg-slate-900 border border-slate-800 p-4 flex items-center gap-3 animate-pulse">
+          <CloudSun className="w-5 h-5 text-sky-400" />
+          <p className="text-xs text-slate-500">Mirando el cielo de tu zona…</p>
+        </div>
+      ) : clima ? (
+        (() => {
+          const consejo = consejoDeRiego(clima);
+          const cielo = describirCodigo(clima.codigo);
+          return (
+            <section className={`rounded-2xl p-4 border flex items-start gap-3 ${
+              consejo?.tono === 'lluvia' ? 'bg-sky-950/40 border-sky-800/60'
+              : consejo?.tono === 'calor' ? 'bg-red-950/30 border-red-900/50'
+              : consejo?.tono === 'frio' ? 'bg-indigo-950/30 border-indigo-900/50'
+              : 'bg-slate-900 border-slate-800'
+            }`}>
+              <span className="text-2xl shrink-0">{consejo?.emoji}</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-black">{consejo?.titulo}</p>
+                <p className="text-[11px] text-slate-400 leading-relaxed mt-0.5">{consejo?.texto}</p>
+                <p className="text-[10px] text-slate-500 mt-1.5 flex items-center gap-1">
+                  <MapPin className="w-3 h-3" /> {clima.tempMin}° / {clima.tempMax}°C · {cielo.texto}
+                </p>
+              </div>
+              <button
+                onClick={reintentarClima}
+                aria-label="Actualizar clima"
+                className="w-8 h-8 rounded-xl bg-slate-800/60 border border-slate-700 flex items-center justify-center shrink-0 active:scale-95 transition"
+              >
+                <RefreshCcw className="w-3.5 h-3.5 text-slate-400" />
+              </button>
+            </section>
+          );
+        })()
+      ) : (
+        <button
+          onClick={reintentarClima}
+          className="w-full rounded-2xl bg-slate-900 border border-dashed border-slate-700 p-4 flex items-center gap-3 text-left active:scale-[0.98] transition"
+        >
+          <CloudSun className="w-5 h-5 text-sky-400 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold">Clima inteligente</p>
+            <p className="text-[11px] text-slate-500 leading-relaxed mt-0.5">
+              {errorClima === 'permiso'
+                ? 'Activa la ubicación y PlantTrack ajusta tus riegos con el pronóstico real de tu zona.'
+                : 'Sin datos del clima ahora — reintenta cuando tengas conexión.'}
+            </p>
+          </div>
+          <span className="text-[10px] font-black px-2.5 py-1.5 rounded-xl bg-sky-500/15 text-sky-300 shrink-0">Activar</span>
+        </button>
+      )}
 
       {/* Próximos riegos */}
       <section className="rounded-2xl bg-slate-900 border border-slate-800 overflow-hidden">

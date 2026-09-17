@@ -171,3 +171,38 @@ export const PRODUCTO_DEMO: AnalisisProducto = {
   ],
   descripcionNoProducto: '',
 };
+
+// ═══════════════════════════════════════════════════════════
+// 🦟 MODO DEMO — diagnóstico de plaga de ejemplo (v1.4).
+// Caso educativo típico: oídio (polvo blanco) en una planta
+// de interior — el diagnóstico más común de todos.
+// ═══════════════════════════════════════════════════════════
+
+import type { DiagnosticoPlaga } from '../types';
+
+export const PLAGA_DEMO: DiagnosticoPlaga = {
+  esPlanta: true,
+  problemaDetectado: true,
+  plagaProbable: 'Oídio (polvo blanco)',
+  confianza: 84,
+  sintomasDetectados: [
+    'Polvo blanco harinoso sobre varias hojas',
+    'Hojas inferiores con amarilleamiento incipiente',
+    'Follaje denso con poca ventilación',
+  ],
+  gravedad: 'moderada',
+  afectaA: [],
+  plan: [
+    'Aísla la planta de las demás mientras dura el tratamiento (el hongo viaja por esporas)',
+    'Corta y desecha las 2-3 hojas más infectadas en una bolsa cerrada — nunca al compost',
+    'Rocía al atardecer: 1 cucharadita de bicarbonato + 1 ml de jabón por litro de agua',
+    'Repite cada 5-7 días y sube la ventilación alrededor',
+    'Riega solo la tierra sin mojar el follaje',
+  ],
+  productoSugerido: 'Fungicida específico para oídio (azufre mojable) si avanza tras 2 semanas',
+  alternativaCasera: 'Bicarbonato de sodio: 1 cucharadita por litro de agua + 1 ml de jabón (adherente) + media cucharadita de aceite vegetal. Aplicar al atardecer cada 5-7 días. La leche diluida al 40% en agua también funciona en fases tempranas.',
+  prevencion: 'Separa las plantas para que el aire circule y riega sin mojar las hojas: el oídio ama el aire quieto y húmedo.',
+  explicacion:
+    'Ese polvito blanco es un hongo (oídio) que vive SOBRE la superficie de la hoja y se alimenta de ella — por eso las hojas van amarilleando. Le encantan los ambientes con aire quieto: cuando las plantas están muy juntas, la humedad de la transpiración queda atrapada y el hongo la aprovecha. La buena noticia: al ser superficial, es de las pocas enfermedades que puedes tratar directamente en casa con bicarbonato, porque altera el pH de la superficie y el hongo no puede pegarse. (Modo demo: diagnóstico de ejemplo — configura tu token de Claude para analizar tu foto real).',
+  descripcionNoPlanta: '',
+};
